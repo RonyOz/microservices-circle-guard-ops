@@ -1,0 +1,88 @@
+// ─────────────────────────────────────────────────────────────
+// Jenkinsfile.dev  —  CircleGuard ops-repo
+//
+// Triggered by: app-repo webhook (feature/* or develop push)
+// Environments: dev namespace
+// Stages: validate → lint chart → deploy → smoke test
+// ─────────────────────────────────────────────────────────────
+
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'SERVICE',   defaultValue: '', description: 'e.g. auth-service')
+        string(name: 'IMAGE_TAG', defaultValue: '', description: 'e.g. sha-abc1234')
+    }
+
+    environment {
+        REGISTRY      = "registry.digitalocean.com/circleguard"
+        NAMESPACE     = "dev"
+        KUBECONFIG    = credentials('kubeconfig-doks')
+        DO_TOKEN      = credentials('do-api-token')
+    }
+
+    options {
+        timeout(time: 15, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timestamps()
+    }
+
+    stages {
+
+        stage('Validate') {
+            steps {
+                script {
+                    if (!params.SERVICE?.trim() || !params.IMAGE_TAG?.trim()) {
+                        error("SERVICE and IMAGE_TAG are required.")
+                    }
+                    echo "Service: ${params.SERVICE} | Tag: ${params.IMAGE_TAG} | Env: ${NAMESPACE}"
+                }
+            }
+        }
+
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        stage('Helm lint') {
+            steps {
+                sh "helm lint ./${params.SERVICE}/chart"
+            }
+        }
+
+        stage('Deploy → dev') {
+            steps {
+                sh """
+                    helm upgrade --install ${params.SERVICE} ./${params.SERVICE}/chart \\
+                        --namespace ${NAMESPACE} \\
+                        --create-namespace \\
+                        --set image.repository=${REGISTRY}/${params.SERVICE} \\
+                        --set image.tag=${params.IMAGE_TAG} \\
+                        --wait --timeout 5m
+                """
+            }
+        }
+
+        stage('Smoke test') {
+            steps {
+                sh """
+                    kubectl rollout status deployment/${params.SERVICE} \\
+                        -n ${NAMESPACE} --timeout=90s
+                    kubectl get pods -n ${NAMESPACE} \\
+                        -l app.kubernetes.io/name=${params.SERVICE}
+                """
+            }
+        }
+    }
+
+    post {
+        failure {
+            sh "helm rollback ${params.SERVICE} --namespace ${NAMESPACE} || true"
+            echo "❌ Dev deploy failed — rolled back."
+        }
+        success {
+            echo "✅ ${params.SERVICE}:${params.IMAGE_TAG} live in dev."
+        }
+        always { cleanWs() }
+    }
+}

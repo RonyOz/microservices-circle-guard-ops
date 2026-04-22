@@ -1,0 +1,6 @@
+apiVersion: v2
+name: contact-tracing-service
+description: Helm chart for CircleGuard contact-tracing-service
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

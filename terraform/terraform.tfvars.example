@@ -1,0 +1,13 @@
+# Copy this to terraform.tfvars and fill in your values.
+# NEVER commit terraform.tfvars — it is in .gitignore.
+
+do_token    = "dop_v1_xxxxxxxxxxxxxxxxxxxx"
+do_region   = "nyc1"
+ssh_key_ids = ["ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90"]
+
+# Optional overrides:
+# jenkins_droplet_size = "s-1vcpu-2gb"
+# cluster_name         = "circleguard-k8s"
+# node_size            = "s-2vcpu-4gb"
+# node_count           = 1
+# registry_name        = "circleguard"

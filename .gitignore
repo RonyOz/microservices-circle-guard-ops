@@ -1,0 +1,26 @@
+# Terraform — nunca commitear estado ni credenciales
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
+*.tfvars
+!*.tfvars.example
+
+# Kubeconfigs
+*.kubeconfig
+kubeconfig*
+
+# Locust resultados (generados en runtime)
+locust-results/
+
+# Release notes generadas
+RELEASE_NOTES.md
+RELEASE_NOTES_FINAL.md
+
+# Clonados por pipeline
+app-src/
+
+# OS
+.DS_Store
+Thumbs.db

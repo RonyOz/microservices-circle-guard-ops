@@ -1,0 +1,199 @@
+// ─────────────────────────────────────────────────────────────
+// Jenkinsfile.stage  —  CircleGuard ops-repo
+//
+// Triggered by: app-repo webhook on develop → after dev deploy
+// Environments: stage namespace
+// Stages: deploy → unit tests → integration tests → E2E → Locust
+// ─────────────────────────────────────────────────────────────
+
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'SERVICE',   defaultValue: '', description: 'e.g. auth-service')
+        string(name: 'IMAGE_TAG', defaultValue: '', description: 'e.g. sha-abc1234')
+    }
+
+    environment {
+        REGISTRY   = "registry.digitalocean.com/circleguard"
+        NAMESPACE  = "stage"
+        KUBECONFIG = credentials('kubeconfig-doks')
+        DO_TOKEN   = credentials('do-api-token')
+    }
+
+    options {
+        timeout(time: 40, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timestamps()
+    }
+
+    stages {
+
+        stage('Validate') {
+            steps {
+                script {
+                    if (!params.SERVICE?.trim() || !params.IMAGE_TAG?.trim()) {
+                        error("SERVICE and IMAGE_TAG are required.")
+                    }
+                }
+            }
+        }
+
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        stage('Helm lint') {
+            steps {
+                sh "helm lint ./${params.SERVICE}/chart"
+            }
+        }
+
+        stage('Deploy → stage') {
+            steps {
+                sh """
+                    helm upgrade --install ${params.SERVICE} ./${params.SERVICE}/chart \\
+                        --namespace ${NAMESPACE} \\
+                        --create-namespace \\
+                        --set image.repository=${REGISTRY}/${params.SERVICE} \\
+                        --set image.tag=${params.IMAGE_TAG} \\
+                        --wait --timeout 5m
+                """
+            }
+        }
+
+        stage('Verify rollout') {
+            steps {
+                sh """
+                    kubectl rollout status deployment/${params.SERVICE} \\
+                        -n ${NAMESPACE} --timeout=120s
+                """
+            }
+        }
+
+        // ── Unit tests ──────────────────────────────────────────
+        // Tests run inside the cluster via a temporary test pod
+        // that shares the namespace (has access to PG, Kafka, etc.)
+        stage('Unit tests') {
+            steps {
+                sh """
+                    kubectl run ${params.SERVICE}-unit-test \\
+                        --image=${REGISTRY}/${params.SERVICE}:${params.IMAGE_TAG} \\
+                        --namespace=${NAMESPACE} \\
+                        --restart=Never \\
+                        --rm --attach \\
+                        --command -- sh -c "./gradlew test --tests '*Unit*' || npm test -- --testPathPattern=unit || go test ./... -run Unit"
+                """
+            }
+            post {
+                always {
+                    // Collect JUnit XML if present
+                    junit allowEmptyResults: true,
+                          testResults: '**/test-results/**/*.xml'
+                }
+            }
+        }
+
+        // ── Integration tests ────────────────────────────────────
+        stage('Integration tests') {
+            steps {
+                sh """
+                    kubectl run ${params.SERVICE}-int-test \\
+                        --image=${REGISTRY}/${params.SERVICE}:${params.IMAGE_TAG} \\
+                        --namespace=${NAMESPACE} \\
+                        --restart=Never \\
+                        --rm --attach \\
+                        --env="SPRING_DATASOURCE_URL=jdbc:postgresql://postgresql.${NAMESPACE}.svc.cluster.local:5432/circleguard" \\
+                        --env="KAFKA_BOOTSTRAP_SERVERS=kafka.${NAMESPACE}.svc.cluster.local:9092" \\
+                        --env="NEO4J_URI=bolt://neo4j.${NAMESPACE}.svc.cluster.local:7687" \\
+                        --command -- sh -c "./gradlew test --tests '*Integration*' || npm test -- --testPathPattern=integration || go test ./... -run Integration"
+                """
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true,
+                          testResults: '**/test-results/**/*.xml'
+                }
+            }
+        }
+
+        // ── E2E tests ────────────────────────────────────────────
+        stage('E2E tests') {
+            steps {
+                sh """
+                    kubectl run ${params.SERVICE}-e2e-test \\
+                        --image=${REGISTRY}/${params.SERVICE}:${params.IMAGE_TAG} \\
+                        --namespace=${NAMESPACE} \\
+                        --restart=Never \\
+                        --rm --attach \\
+                        --env="BASE_URL=http://${params.SERVICE}.${NAMESPACE}.svc.cluster.local" \\
+                        --command -- sh -c "./gradlew test --tests '*E2E*' || npm run test:e2e || go test ./... -run E2E"
+                """
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true,
+                          testResults: '**/test-results/**/*.xml'
+                }
+            }
+        }
+
+        // ── Performance / stress tests (Locust) ─────────────────
+        stage('Performance tests (Locust)') {
+            steps {
+                sh """
+                    # Run Locust headless from the ops-repo's locust/ directory.
+                    # Locust is installed on the Jenkins agent (pip install locust).
+                    # Target: the service's ClusterIP (Jenkins needs kubectl port-forward
+                    # or the service must be exposed via NodePort/LoadBalancer in stage).
+
+                    SERVICE_PORT=\$(kubectl get svc ${params.SERVICE} \\
+                        -n ${NAMESPACE} \\
+                        -o jsonpath='{.spec.ports[0].port}')
+
+                    # Forward port in background
+                    kubectl port-forward \\
+                        svc/${params.SERVICE} 18080:\$SERVICE_PORT \\
+                        -n ${NAMESPACE} &
+                    PF_PID=\$!
+                    sleep 3
+
+                    locust \\
+                        -f locust/${params.SERVICE}/locustfile.py \\
+                        --headless \\
+                        --host=http://localhost:18080 \\
+                        --users=20 \\
+                        --spawn-rate=5 \\
+                        --run-time=60s \\
+                        --csv=locust-results/${params.SERVICE} \\
+                        --html=locust-results/${params.SERVICE}-report.html
+
+                    kill \$PF_PID || true
+                """
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'locust-results/**',
+                                     allowEmptyArchive: true
+                    publishHTML(target: [
+                        allowMissing: true,
+                        reportDir:    'locust-results',
+                        reportFiles:  "${params.SERVICE}-report.html",
+                        reportName:   "Locust Report — ${params.SERVICE}"
+                    ])
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            sh "helm rollback ${params.SERVICE} --namespace ${NAMESPACE} || true"
+            echo "❌ Stage pipeline failed — rolled back."
+        }
+        success {
+            echo "✅ All stage tests passed for ${params.SERVICE}:${params.IMAGE_TAG}."
+        }
+        always { cleanWs() }
+    }
+}

@@ -1,0 +1,15 @@
+# Neo4j Helm values
+neo4j:
+  name: neo4j
+  password: ""  # Injected via secret neo4j-secret key: NEO4J_PASSWORD
+
+volumes:
+  data:
+    mode: defaultStorageClass
+    defaultStorageClass:
+      requests:
+        storage: 5Gi
+
+config:
+  NEO4J_PLUGINS: '["apoc"]'
+  NEO4J_dbms_connector_bolt_advertised__address: ":7687"

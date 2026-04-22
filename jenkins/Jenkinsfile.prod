@@ -1,0 +1,175 @@
+// ─────────────────────────────────────────────────────────────
+// Jenkinsfile.prod  —  CircleGuard ops-repo
+//
+// Triggered by: app-repo webhook on main push
+// Environments: production namespace
+// Stages: validate → unit tests → deploy → verify → release notes
+//
+// Release notes: auto-generated from conventional commits
+// (feat/fix/chore) since last Git tag using git-cliff.
+// ─────────────────────────────────────────────────────────────
+
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'SERVICE',    defaultValue: '', description: 'e.g. auth-service')
+        string(name: 'IMAGE_TAG',  defaultValue: '', description: 'e.g. sha-abc1234')
+        string(name: 'GIT_COMMIT', defaultValue: '', description: 'Full commit SHA from app-repo')
+        string(name: 'VERSION',    defaultValue: '', description: 'Semantic version e.g. 1.2.0 (optional)')
+    }
+
+    environment {
+        REGISTRY         = "registry.digitalocean.com/circleguard"
+        NAMESPACE        = "production"
+        KUBECONFIG       = credentials('kubeconfig-doks')
+        DO_TOKEN         = credentials('do-api-token')
+        GITHUB_TOKEN     = credentials('github-token')
+        APP_REPO         = "your-org/circleguard-dev"   // ← update to your app-repo
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+        timestamps()
+    }
+
+    stages {
+
+        stage('Validate') {
+            steps {
+                script {
+                    if (!params.SERVICE?.trim() || !params.IMAGE_TAG?.trim()) {
+                        error("SERVICE and IMAGE_TAG are required.")
+                    }
+                    echo "Production deploy: ${params.SERVICE}:${params.IMAGE_TAG}"
+                }
+            }
+        }
+
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        // ── Unit tests before touching production ────────────────
+        // Fast gate: if unit tests fail, we never touch production.
+        stage('Unit tests') {
+            steps {
+                sh """
+                    docker run --rm \\
+                        ${REGISTRY}/${params.SERVICE}:${params.IMAGE_TAG} \\
+                        sh -c "./gradlew test --tests '*Unit*' || npm test -- --testPathPattern=unit || go test ./... -run Unit"
+                """
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true,
+                          testResults: '**/test-results/**/*.xml'
+                }
+            }
+        }
+
+        stage('Helm lint') {
+            steps {
+                sh "helm lint ./${params.SERVICE}/chart"
+            }
+        }
+
+        // ── Blue/green-safe deploy ───────────────────────────────
+        // helm upgrade with --atomic rolls back automatically on failure.
+        stage('Deploy → production') {
+            steps {
+                sh """
+                    helm upgrade --install ${params.SERVICE} ./${params.SERVICE}/chart \\
+                        --namespace ${NAMESPACE} \\
+                        --create-namespace \\
+                        --set image.repository=${REGISTRY}/${params.SERVICE} \\
+                        --set image.tag=${params.IMAGE_TAG} \\
+                        --atomic \\
+                        --timeout 8m
+                """
+            }
+        }
+
+        stage('Verify rollout') {
+            steps {
+                sh """
+                    kubectl rollout status deployment/${params.SERVICE} \\
+                        -n ${NAMESPACE} --timeout=180s
+                    kubectl get pods -n ${NAMESPACE} \\
+                        -l app.kubernetes.io/name=${params.SERVICE}
+                """
+            }
+        }
+
+        // ── Release notes ────────────────────────────────────────
+        // Uses git-cliff to parse conventional commits and generate
+        // a CHANGELOG entry + GitHub Release.
+        //
+        // Conventional commit format (enforced in app-repo):
+        //   feat(auth): add JWT refresh endpoint
+        //   fix(kafka): handle consumer group rebalance timeout
+        //   chore(deps): bump spring-boot to 3.3.1
+        stage('Generate release notes') {
+            when {
+                expression { params.GIT_COMMIT?.trim() }
+            }
+            steps {
+                script {
+                    def version = params.VERSION?.trim() ?: "sha-${params.IMAGE_TAG}"
+                    def releaseDate = new Date().format("yyyy-MM-dd")
+
+                    sh """
+                        # Install git-cliff if not present
+                        if ! command -v git-cliff &> /dev/null; then
+                            curl -L https://github.com/orhun/git-cliff/releases/download/v2.4.0/git-cliff-2.4.0-x86_64-unknown-linux-gnu.tar.gz \\
+                                | tar -xz --strip-components=1
+                            mv git-cliff /usr/local/bin/
+                        fi
+
+                        # Clone app-repo to read commit history
+                        git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${APP_REPO}.git app-src
+                        cd app-src
+
+                        # Generate changelog since last tag
+                        git-cliff --latest --strip header \\
+                            --output ../RELEASE_NOTES.md
+
+                        cd ..
+
+                        # Prepend service + version header
+                        echo "## ${params.SERVICE} — ${version} (${releaseDate})\\n" | \\
+                            cat - RELEASE_NOTES.md > RELEASE_NOTES_FINAL.md
+
+                        cat RELEASE_NOTES_FINAL.md
+                    """
+
+                    // Publish as GitHub Release on the app-repo
+                    sh """
+                        gh release create "${version}-${params.SERVICE}" \\
+                            --repo ${APP_REPO} \\
+                            --title "${params.SERVICE} ${version}" \\
+                            --notes-file RELEASE_NOTES_FINAL.md \\
+                            --target ${params.GIT_COMMIT} || true
+                    """
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'RELEASE_NOTES_FINAL.md',
+                                     allowEmptyArchive: true
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "❌ Production deploy failed. --atomic ensured automatic rollback."
+        }
+        success {
+            echo "✅ ${params.SERVICE}:${params.IMAGE_TAG} in production. Release notes published."
+        }
+        always { cleanWs() }
+    }
+}

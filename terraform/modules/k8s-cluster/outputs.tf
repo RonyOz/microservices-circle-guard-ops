@@ -7,7 +7,7 @@ output "cluster_endpoint" {
 }
 
 output "registry_endpoint" {
-  value = "${digitalocean_container_registry.registry.endpoint}"
+  value = digitalocean_container_registry.registry.endpoint
 }
 
 output "registry_name" {

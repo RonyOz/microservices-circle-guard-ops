@@ -23,24 +23,22 @@ resource "digitalocean_droplet" "jenkins" {
   size     = var.droplet_size
   image    = "ubuntu-22-04-x64"
   ssh_keys = var.ssh_key_ids
+  vpc_uuid = var.vpc_uuid
 
-  # cloud-init: install Docker + Java 21 on first boot (~3 min)
+  # cloud-init: install Docker + Java 21 + Jenkins + kubectl + helm + doctl
+  # pipefail makes curl errors fail the pipeline (otherwise tee masks them).
   user_data = <<-CLOUD_INIT
     #!/bin/bash
-    set -e
+    set -euo pipefail
 
-    # System update
     apt-get update -y
     apt-get install -y curl gnupg lsb-release ca-certificates
 
     # Docker
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-      -o /etc/apt/keyrings/docker.asc
-    echo "deb [arch=$(dpkg --print-architecture) \
-      signed-by=/etc/apt/keyrings/docker.asc] \
-      https://download.docker.com/linux/ubuntu \
-      $(lsb_release -cs) stable" \
+      | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
       > /etc/apt/sources.list.d/docker.list
     apt-get update -y
     apt-get install -y docker-ce docker-ce-cli containerd.io
@@ -48,34 +46,30 @@ resource "digitalocean_droplet" "jenkins" {
     # Java 21 (required by Jenkins LTS)
     apt-get install -y openjdk-21-jdk-headless
 
-    # Jenkins LTS
+    # Jenkins LTS — dearmor the key so apt can verify the signature.
     curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
-      | tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
-    echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
-      https://pkg.jenkins.io/debian-stable binary/" \
+      | gpg --dearmor -o /usr/share/keyrings/jenkins-keyring.gpg
+    echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.gpg] https://pkg.jenkins.io/debian-stable binary/" \
       > /etc/apt/sources.list.d/jenkins.list
     apt-get update -y
     apt-get install -y jenkins
 
-    # Allow jenkins user to run Docker without sudo
     usermod -aG docker jenkins
 
     # kubectl
-    curl -LO "https://dl.k8s.io/release/$(curl -Ls \
-      https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    curl -fsSLO "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+    rm kubectl
 
     # Helm
-    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
-      | bash
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-    # doctl (to fetch kubeconfig from DOKS)
-    curl -sL https://github.com/digitalocean/doctl/releases/download/v1.110.0/doctl-1.110.0-linux-amd64.tar.gz \
-      | tar -xzv
-    mv doctl /usr/local/bin
+    # doctl (for fetching kubeconfig from DOKS inside Jenkins jobs)
+    curl -fsSL https://github.com/digitalocean/doctl/releases/download/v1.110.0/doctl-1.110.0-linux-amd64.tar.gz \
+      | tar -xz -C /tmp
+    mv /tmp/doctl /usr/local/bin/
 
-    systemctl enable jenkins
-    systemctl start jenkins
+    systemctl enable --now jenkins
   CLOUD_INIT
 
   tags = ["circleguard", "jenkins", "ci"]

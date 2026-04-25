@@ -44,3 +44,9 @@ variable "registry_name" {
   type        = string
   default     = "circleguard"
 }
+
+variable "registry_region" {
+  description = "DOCR region. DOCR only supports: nyc3, sfo3, ams3, sgp1, fra1, syd1."
+  type        = string
+  default     = "nyc3"
+}

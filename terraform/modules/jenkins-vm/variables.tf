@@ -10,3 +10,8 @@ variable "droplet_size" {
 variable "ssh_key_ids" {
   type = list(string)
 }
+
+variable "vpc_uuid" {
+  description = "UUID of the VPC where the Jenkins droplet is placed."
+  type        = string
+}

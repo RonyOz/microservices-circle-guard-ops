@@ -25,29 +25,32 @@ provider "digitalocean" {
   token = var.do_token
 }
 
-# ---------------------------------------------------------------
-# Module: Jenkins VM  (power on/off independently)
-# Deploy:  terraform apply -target=module.jenkins_vm
-# Destroy: terraform destroy -target=module.jenkins_vm
-# ---------------------------------------------------------------
+# Shared VPC for private networking between Jenkins and the DOKS cluster.
+# Creating it explicitly avoids the "Failed to resolve VPC" error on regions
+# where DO hasn't auto-provisioned a default VPC for the account yet.
+resource "digitalocean_vpc" "main" {
+  name     = "circleguard-vpc"
+  region   = var.do_region
+  ip_range = "10.20.0.0/16"
+}
+
 module "jenkins_vm" {
   source = "./modules/jenkins-vm"
 
   do_region    = var.do_region
   ssh_key_ids  = var.ssh_key_ids
   droplet_size = var.jenkins_droplet_size
+  vpc_uuid     = digitalocean_vpc.main.id
 }
 
-# ---------------------------------------------------------------
-# Module: K8s cluster  (longer-lived, shared by all environments)
-# Deploy:  terraform apply -target=module.k8s_cluster
-# ---------------------------------------------------------------
 module "k8s_cluster" {
   source = "./modules/k8s-cluster"
 
-  do_region     = var.do_region
-  cluster_name  = var.cluster_name
-  node_size     = var.node_size
-  node_count    = var.node_count
-  registry_name = var.registry_name
+  do_region       = var.do_region
+  cluster_name    = var.cluster_name
+  node_size       = var.node_size
+  node_count      = var.node_count
+  registry_name   = var.registry_name
+  registry_region = var.registry_region
+  vpc_uuid        = digitalocean_vpc.main.id
 }

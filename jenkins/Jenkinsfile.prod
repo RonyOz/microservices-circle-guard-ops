@@ -25,7 +25,7 @@ pipeline {
         KUBECONFIG       = credentials('kubeconfig-doks')
         DO_TOKEN         = credentials('do-api-token')
         GITHUB_TOKEN     = credentials('github-token')
-        APP_REPO         = "your-org/circleguard-dev"   // ← update to your app-repo
+        APP_REPO         = "RonyOz/microservices-circle-guard-ops"
     }
 
     options {

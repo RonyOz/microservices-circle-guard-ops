@@ -21,6 +21,12 @@ variable "jenkins_droplet_size" {
   default     = "s-1vcpu-2gb"
 }
 
+variable "jenkins_volume_size" {
+  description = "Size in GB of the persistent volume mounted at /var/lib/jenkins. 10 GB is plenty for jobs + plugins."
+  type        = number
+  default     = 10
+}
+
 variable "cluster_name" {
   description = "Name for the DOKS cluster."
   type        = string

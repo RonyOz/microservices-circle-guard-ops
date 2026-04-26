@@ -34,6 +34,20 @@ resource "digitalocean_vpc" "main" {
   ip_range = "10.20.0.0/16"
 }
 
+# Persistent /var/lib/jenkins. Lives outside the jenkins_vm module so the
+# droplet can be destroyed/recreated without losing Jenkins state (jobs,
+# plugins, credentials). The volume costs ~$1/month at 10 GB.
+#
+# To truly clean up: comment out the module reference, or run
+#   doctl compute volume delete jenkins-home
+resource "digitalocean_volume" "jenkins_home" {
+  name                    = "jenkins-home"
+  region                  = var.do_region
+  size                    = var.jenkins_volume_size
+  initial_filesystem_type = "ext4"
+  description             = "Persistent JENKINS_HOME — survives droplet destroys."
+}
+
 module "jenkins_vm" {
   source = "./modules/jenkins-vm"
 
@@ -41,6 +55,8 @@ module "jenkins_vm" {
   ssh_key_ids  = var.ssh_key_ids
   droplet_size = var.jenkins_droplet_size
   vpc_uuid     = digitalocean_vpc.main.id
+  volume_id    = digitalocean_volume.jenkins_home.id
+  volume_name  = digitalocean_volume.jenkins_home.name
 }
 
 module "k8s_cluster" {

@@ -7,26 +7,18 @@ terraform {
   }
 }
 
-# ---------------------------------------------------------------
-# Droplet: Jenkins + Docker
-#
-# Lifecycle: power off when not working, power on to resume.
-#   doctl compute droplet-action power-off --droplet-id <id>
-#   doctl compute droplet-action power-on  --droplet-id <id>
-#
-# State (Jenkins config, jobs, plugins) lives on the disk and
-# survives power cycles. Only a `terraform destroy` removes it.
-# ---------------------------------------------------------------
+# Droplet runs Jenkins + Docker. JENKINS_HOME is on a separate volume so the
+# droplet itself is treated as ephemeral — destroy when not working, recreate
+# when resuming. State persists across recreations.
 resource "digitalocean_droplet" "jenkins" {
-  name     = "circleguard-jenkins"
-  region   = var.do_region
-  size     = var.droplet_size
-  image    = "ubuntu-22-04-x64"
-  ssh_keys = var.ssh_key_ids
-  vpc_uuid = var.vpc_uuid
+  name       = "circleguard-jenkins"
+  region     = var.do_region
+  size       = var.droplet_size
+  image      = "ubuntu-22-04-x64"
+  ssh_keys   = var.ssh_key_ids
+  vpc_uuid   = var.vpc_uuid
+  volume_ids = [var.volume_id]
 
-  # cloud-init: install Docker + Java 21 + Jenkins + kubectl + helm + doctl
-  # pipefail makes curl errors fail the pipeline (otherwise tee masks them).
   user_data = <<-CLOUD_INIT
     #!/bin/bash
     set -euo pipefail
@@ -34,7 +26,21 @@ resource "digitalocean_droplet" "jenkins" {
     apt-get update -y
     apt-get install -y curl gnupg lsb-release ca-certificates
 
-    # Docker
+    # ---- Mount persistent volume at /var/lib/jenkins BEFORE installing Jenkins ----
+    DEVICE=/dev/disk/by-id/scsi-0DO_Volume_${var.volume_name}
+    for i in $(seq 1 60); do
+      [ -b "$DEVICE" ] && break
+      sleep 2
+    done
+    if ! blkid "$DEVICE" >/dev/null 2>&1; then
+      mkfs.ext4 -F "$DEVICE"
+    fi
+    mkdir -p /var/lib/jenkins
+    grep -q "$DEVICE" /etc/fstab || \
+      echo "$DEVICE /var/lib/jenkins ext4 defaults,nofail,discard 0 2" >> /etc/fstab
+    mount /var/lib/jenkins
+
+    # ---- Docker ----
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
       | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -43,10 +49,10 @@ resource "digitalocean_droplet" "jenkins" {
     apt-get update -y
     apt-get install -y docker-ce docker-ce-cli containerd.io
 
-    # Java 21 (required by Jenkins LTS)
+    # ---- Java 21 (required by Jenkins LTS) ----
     apt-get install -y openjdk-21-jdk-headless
 
-    # Jenkins LTS — dearmor the key so apt can verify the signature.
+    # ---- Jenkins LTS ----
     curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
       | gpg --dearmor -o /usr/share/keyrings/jenkins-keyring.gpg
     echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.gpg] https://pkg.jenkins.io/debian-stable binary/" \
@@ -54,17 +60,20 @@ resource "digitalocean_droplet" "jenkins" {
     apt-get update -y
     apt-get install -y jenkins
 
+    # Re-own JENKINS_HOME — on droplet recreation the jenkins UID may differ
+    # from the one that originally wrote files to the volume.
+    chown -R jenkins:jenkins /var/lib/jenkins
     usermod -aG docker jenkins
 
-    # kubectl
+    # ---- kubectl ----
     curl -fsSLO "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
     rm kubectl
 
-    # Helm
+    # ---- Helm ----
     curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-    # doctl (for fetching kubeconfig from DOKS inside Jenkins jobs)
+    # ---- doctl ----
     curl -fsSL https://github.com/digitalocean/doctl/releases/download/v1.110.0/doctl-1.110.0-linux-amd64.tar.gz \
       | tar -xz -C /tmp
     mv /tmp/doctl /usr/local/bin/

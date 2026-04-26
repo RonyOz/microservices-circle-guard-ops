@@ -1,0 +1,105 @@
+// ─────────────────────────────────────────────────────────────
+// Jenkinsfile.infra  —  CircleGuard ops-repo
+//
+// Despliega la infraestructura compartida (PostgreSQL, Neo4j,
+// Kafka, Redis) en el namespace seleccionado. Idempotente —
+// volver a correrlo aplica cambios incrementales (helm upgrade).
+//
+// Trigger: manual ("Build with Parameters") tras up-cluster.sh.
+// ─────────────────────────────────────────────────────────────
+
+pipeline {
+    agent any
+
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'stage', 'production'],
+            description: 'Namespace de destino'
+        )
+        booleanParam(
+            name: 'RUN_BOOTSTRAP',
+            defaultValue: true,
+            description: 'Crear namespaces, vincular DOCR y agregar repos Helm. Idempotente — déjalo en true salvo que sepas que ya está listo.'
+        )
+    }
+
+    environment {
+        CLUSTER_NAME              = 'circleguard-k8s'
+        REGISTRY_NAME             = 'circleguard'
+        KUBECONFIG                = credentials('kubeconfig-doks')
+        DIGITALOCEAN_ACCESS_TOKEN = credentials('do-api-token')
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '15'))
+        timestamps()
+        ansiColor('xterm')
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        stage('Refresh kubeconfig') {
+            // Trae un kubeconfig fresco usando el token DO.
+            // Sobrescribe el archivo apuntado por $KUBECONFIG (temp file de
+            // withCredentials), de forma que si el cluster fue recreado
+            // tras un down-cluster.sh / up-cluster.sh, el resto del pipeline
+            // se conecta sin tocar la credencial almacenada en Jenkins.
+            steps {
+                sh '''
+                    doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
+                    kubectl cluster-info
+                '''
+            }
+        }
+
+        stage('Bootstrap cluster') {
+            when { expression { return params.RUN_BOOTSTRAP } }
+            steps {
+                sh '''
+                    chmod +x scripts/bootstrap-cluster.sh
+                    ./scripts/bootstrap-cluster.sh "$CLUSTER_NAME" "$REGISTRY_NAME"
+                '''
+            }
+        }
+
+        stage('Deploy infrastructure') {
+            steps {
+                sh '''
+                    chmod +x scripts/deploy-infrastructure.sh
+                    ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"
+                '''
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                sh '''
+                    echo "── Pods en $ENVIRONMENT ──"
+                    kubectl get pods -n "$ENVIRONMENT" -o wide
+                    echo
+                    echo "── Servicios en $ENVIRONMENT ──"
+                    kubectl get svc -n "$ENVIRONMENT"
+                    echo
+                    echo "── Helm releases ──"
+                    helm list -n "$ENVIRONMENT"
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Infra desplegada en namespace ${params.ENVIRONMENT}."
+        }
+        failure {
+            echo "❌ Falló el despliegue de infra. Revisar logs de helm/kubectl."
+        }
+        always { cleanWs() }
+    }
+}

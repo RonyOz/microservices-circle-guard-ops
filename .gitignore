@@ -24,3 +24,7 @@ app-src/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code / MCP — nunca commitear (puede contener tokens API)
+.claude/
+.mcp.json

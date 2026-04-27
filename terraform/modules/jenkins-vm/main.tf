@@ -53,7 +53,9 @@ resource "digitalocean_droplet" "jenkins" {
     apt-get install -y openjdk-21-jdk-headless
 
     # ---- Jenkins LTS ----
-    curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
+    # Note: the 2023 key URL (per official docs) ships an expired key.
+    # The 2026 key is the current one as of writing (valid through 2028-12-21).
+    curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key \
       | gpg --dearmor -o /usr/share/keyrings/jenkins-keyring.gpg
     echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.gpg] https://pkg.jenkins.io/debian-stable binary/" \
       > /etc/apt/sources.list.d/jenkins.list

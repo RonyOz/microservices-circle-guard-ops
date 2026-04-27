@@ -27,8 +27,10 @@ pipeline {
     environment {
         CLUSTER_NAME              = 'circleguard-k8s'
         REGISTRY_NAME             = 'circleguard'
-        KUBECONFIG                = credentials('kubeconfig-doks')
         DIGITALOCEAN_ACCESS_TOKEN = credentials('do-api-token')
+        // Kubeconfig generado fresco por doctl en cada build. Usa un path
+        // escribible del workspace, no la credencial Secret file (que es 0400).
+        KUBECONFIG                = "${WORKSPACE}/.kube/config"
     }
 
     options {
@@ -45,13 +47,12 @@ pipeline {
         }
 
         stage('Refresh kubeconfig') {
-            // Trae un kubeconfig fresco usando el token DO.
-            // Sobrescribe el archivo apuntado por $KUBECONFIG (temp file de
-            // withCredentials), de forma que si el cluster fue recreado
-            // tras un down-cluster.sh / up-cluster.sh, el resto del pipeline
-            // se conecta sin tocar la credencial almacenada en Jenkins.
+            // Genera un kubeconfig fresco en $WORKSPACE/.kube/config usando
+            // el token DO. Inmune a recreaciones del cluster — no depende de
+            // ninguna credencial Jenkins más allá de do-api-token.
             steps {
                 sh '''
+                    mkdir -p "$(dirname "$KUBECONFIG")"
                     doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
                     kubectl cluster-info
                 '''

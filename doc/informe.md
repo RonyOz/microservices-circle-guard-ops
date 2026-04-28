@@ -301,7 +301,7 @@ Un *bootstrap*, en este contexto, es el conjunto de operaciones que sólo tienen
 - Vincular DOCR — solo se vincula una vez por clúster.
 - Agregar repos Helm — solo se agregan una vez al `JENKINS_HOME`.
 - Crear los secrets de credenciales de las dependencias — sólo se crean una vez, se preservan para que las claves coincidan con los datos persistidos en PVCs.
-
+  
 Cada operación está implementada de forma **idempotente** (`kubectl apply -f -` desde un `--dry-run=client -o yaml`, o `kubectl get secret || kubectl create secret`), por lo que ejecutar la fase repetidamente no produce errores ni efectos colaterales destructivos. Por eso `RUN_BOOTSTRAP` puede dejarse activado por defecto.
 
 ---

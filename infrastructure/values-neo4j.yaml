@@ -2,14 +2,22 @@
 neo4j:
   name: neo4j
   passwordFromSecret: neo4j-secret  # secret created by bootstrap-cluster.sh
+  # Comprimido para caber en 1 nodo s-2vcpu-4gb junto a Postgres/Kafka/Redis.
+  resources:
+    cpu: "200m"
+    memory: "1Gi"
 
 volumes:
   data:
     mode: defaultStorageClass
     defaultStorageClass:
       requests:
-        storage: 5Gi
+        storage: 2Gi
 
+# Heap de la JVM acotado a la mitad de la memoria del pod.
 config:
   NEO4J_PLUGINS: '["apoc"]'
   NEO4J_dbms_connector_bolt_advertised__address: ":7687"
+  NEO4J_server_memory_heap_initial__size: "512m"
+  NEO4J_server_memory_heap_max__size: "512m"
+  NEO4J_server_memory_pagecache_size: "256m"

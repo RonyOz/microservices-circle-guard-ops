@@ -67,10 +67,16 @@ pipeline {
         stage('Bootstrap cluster') {
             when { expression { return params.RUN_BOOTSTRAP } }
             steps {
-                sh '''
-                    chmod +x scripts/bootstrap-cluster.sh
-                    ./scripts/bootstrap-cluster.sh "$CLUSTER_NAME" "$REGISTRY_NAME"
-                '''
+                withCredentials([string(credentialsId: 'do-api-token', variable: 'DO_TOKEN')]) {
+                    sh '''
+                        export DIGITALOCEAN_ACCESS_TOKEN="$DO_TOKEN"
+                        mkdir -p "${WORKSPACE}/.kube"
+                        export KUBECONFIG="${WORKSPACE}/.kube/config"
+                        chmod +x scripts/bootstrap-cluster.sh
+                        ./scripts/bootstrap-cluster.sh "$CLUSTER_NAME" "$REGISTRY_NAME"
+                        chmod 600 "${WORKSPACE}/.kube/config" || true
+                    '''
+                }
             }
         }
 

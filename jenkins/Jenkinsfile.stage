@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────
 // Jenkinsfile.stage  —  CircleGuard ops-repo
 //
-// Triggered by: app-repo webhook on develop → after dev deploy
+// Triggered by: app-repo webhook on develop -> after dev deploy
 // Environments: stage namespace
-// Stages: deploy → unit tests → integration tests → E2E → Locust
+// Stages: deploy -> unit tests -> integration tests -> E2E -> Locust
 // ─────────────────────────────────────────────────────────────
 
 pipeline {
@@ -49,7 +49,7 @@ pipeline {
             }
         }
 
-        stage('Deploy → stage') {
+        stage('Deploy -> stage') {
             steps {
                 sh """
                     helm upgrade --install ${params.SERVICE} ./${params.SERVICE}/chart \\
@@ -179,7 +179,7 @@ pipeline {
                         allowMissing: true,
                         reportDir:    'locust-results',
                         reportFiles:  "${params.SERVICE}-report.html",
-                        reportName:   "Locust Report — ${params.SERVICE}"
+                        reportName:   "Locust Report - ${params.SERVICE}"
                     ])
                 }
             }
@@ -189,10 +189,10 @@ pipeline {
     post {
         failure {
             sh "helm rollback ${params.SERVICE} --namespace ${NAMESPACE} || true"
-            echo "❌ Stage pipeline failed — rolled back."
+            echo "[FAIL] Stage pipeline failed - rolled back."
         }
         success {
-            echo "✅ All stage tests passed for ${params.SERVICE}:${params.IMAGE_TAG}."
+            echo "[ OK ] All stage tests passed for ${params.SERVICE}:${params.IMAGE_TAG}."
         }
         always { cleanWs() }
     }

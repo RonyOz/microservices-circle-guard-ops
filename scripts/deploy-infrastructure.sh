@@ -9,7 +9,7 @@ set -euo pipefail
 NS="${1:?Usage: $0 <namespace>  (dev|stage|production)}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "→ Deploying shared infrastructure to namespace: $NS"
+echo "==> Deploying shared infrastructure to namespace: $NS"
 
 helm upgrade --install postgresql bitnami/postgresql \
   --namespace "$NS" \
@@ -32,4 +32,4 @@ helm upgrade --install redis bitnami/redis \
   --values "$REPO_ROOT/infrastructure/values-redis.yaml" \
   --wait --timeout 5m
 
-echo "✅ Infrastructure deployed to $NS"
+echo "[ OK ] Infrastructure deployed to $NS"

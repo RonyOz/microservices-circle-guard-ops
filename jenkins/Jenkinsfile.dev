@@ -3,7 +3,7 @@
 //
 // Triggered by: app-repo webhook (feature/* or develop push)
 // Environments: dev namespace
-// Stages: validate → lint chart → deploy → smoke test
+// Stages: validate -> lint chart -> deploy -> smoke test
 // ─────────────────────────────────────────────────────────────
 
 pipeline {
@@ -50,7 +50,7 @@ pipeline {
             }
         }
 
-        stage('Deploy → dev') {
+        stage('Deploy -> dev') {
             steps {
                 sh """
                     helm upgrade --install ${params.SERVICE} ./${params.SERVICE}/chart \\
@@ -78,10 +78,10 @@ pipeline {
     post {
         failure {
             sh "helm rollback ${params.SERVICE} --namespace ${NAMESPACE} || true"
-            echo "❌ Dev deploy failed — rolled back."
+            echo "[FAIL] Dev deploy failed - rolled back."
         }
         success {
-            echo "✅ ${params.SERVICE}:${params.IMAGE_TAG} live in dev."
+            echo "[ OK ] ${params.SERVICE}:${params.IMAGE_TAG} live in dev."
         }
         always { cleanWs() }
     }

@@ -3,7 +3,7 @@
 //
 // Triggered by: app-repo webhook on main push
 // Environments: production namespace
-// Stages: validate → unit tests → deploy → verify → release notes
+// Stages: validate -> unit tests -> deploy -> verify -> release notes
 //
 // Release notes: auto-generated from conventional commits
 // (feat/fix/chore) since last Git tag using git-cliff.
@@ -77,7 +77,7 @@ pipeline {
 
         // ── Blue/green-safe deploy ───────────────────────────────
         // helm upgrade with --atomic rolls back automatically on failure.
-        stage('Deploy → production') {
+        stage('Deploy -> production') {
             steps {
                 sh """
                     helm upgrade --install ${params.SERVICE} ./${params.SERVICE}/chart \\
@@ -138,7 +138,7 @@ pipeline {
                         cd ..
 
                         # Prepend service + version header
-                        echo "## ${params.SERVICE} — ${version} (${releaseDate})\\n" | \\
+                        echo "## ${params.SERVICE} - ${version} (${releaseDate})\\n" | \\
                             cat - RELEASE_NOTES.md > RELEASE_NOTES_FINAL.md
 
                         cat RELEASE_NOTES_FINAL.md
@@ -165,10 +165,10 @@ pipeline {
 
     post {
         failure {
-            echo "❌ Production deploy failed. --atomic ensured automatic rollback."
+            echo "[FAIL] Production deploy failed. --atomic ensured automatic rollback."
         }
         success {
-            echo "✅ ${params.SERVICE}:${params.IMAGE_TAG} in production. Release notes published."
+            echo "[ OK ] ${params.SERVICE}:${params.IMAGE_TAG} in production. Release notes published."
         }
         always { cleanWs() }
     }

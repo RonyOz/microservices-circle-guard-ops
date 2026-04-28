@@ -3,7 +3,7 @@
 # when actually deploying or running stage/prod tests. ~6 min to provision.
 #
 # After this completes, trigger the `circleguard-infra` job in Jenkins
-# (Build with Parameters → ENVIRONMENT=dev) to deploy Postgres/Kafka/Neo4j/Redis.
+# (Build with Parameters -> ENVIRONMENT=dev) to deploy Postgres/Kafka/Neo4j/Redis.
 # The bash scripts ./scripts/bootstrap-cluster.sh and deploy-infrastructure.sh
 # remain available for local troubleshooting.
 set -euo pipefail
@@ -19,4 +19,4 @@ echo
 echo "Cluster ID: $(terraform output -raw k8s_cluster_id)"
 echo "Registry  : $(terraform output -raw registry_endpoint)"
 echo
-echo "Next: en Jenkins, Build job 'circleguard-infra' → ENVIRONMENT=dev (RUN_BOOTSTRAP=true)."
+echo "Next: en Jenkins, Build job 'circleguard-infra' -> ENVIRONMENT=dev (RUN_BOOTSTRAP=true)."

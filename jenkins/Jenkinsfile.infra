@@ -96,10 +96,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Infra desplegada en namespace ${params.ENVIRONMENT}."
+            echo "[ OK ] Infra desplegada en namespace ${params.ENVIRONMENT}."
         }
         failure {
-            echo "❌ Falló el despliegue de infra. Revisar logs de helm/kubectl."
+            echo "[FAIL] Falló el despliegue de infra. Revisar logs de helm/kubectl."
         }
         always { cleanWs() }
     }

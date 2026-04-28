@@ -248,7 +248,6 @@ Instalados desde `Manage Jenkins → Plugins → Available`, seguidos de un rein
 
 | ID | Tipo | Origen del valor |
 |---|---|---|
-| `kubeconfig-doks` | Secret file | Salida de `doctl kubernetes cluster kubeconfig show circleguard-k8s` |
 | `do-api-token` | Secret text | Mismo token del archivo `terraform.tfvars` |
 | `github-token` | Secret text | *Personal Access Token* de GitHub con scopes `repo` y `workflow` |
 

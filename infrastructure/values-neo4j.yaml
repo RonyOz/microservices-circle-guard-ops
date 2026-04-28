@@ -1,7 +1,7 @@
 # Neo4j Helm values
 neo4j:
   name: neo4j
-  password: ""  # Injected via secret neo4j-secret key: NEO4J_PASSWORD
+  passwordFromSecret: neo4j-secret  # secret created by bootstrap-cluster.sh
 
 volumes:
   data:

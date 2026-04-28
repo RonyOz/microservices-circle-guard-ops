@@ -1,8 +1,7 @@
-# Bitnami PostgreSQL values — rendered per-environment by Terraform
+# Bitnami PostgreSQL values
 auth:
   database: circleguard
   username: circleguard
-  # Password injected via K8s secret — do NOT hardcode here
   existingSecret: postgresql-secret
   secretKeys:
     adminPasswordKey: postgres-password
@@ -11,9 +10,8 @@ auth:
 primary:
   persistence:
     enabled: true
-    size: "{{ if eq .environment \"production\" }}10Gi{{ else }}2Gi{{ end }}"
-
-resources:
-  requests:
-    cpu: "{{ if eq .environment \"production\" }}500m{{ else }}100m{{ end }}"
-    memory: "{{ if eq .environment \"production\" }}512Mi{{ else }}256Mi{{ end }}"
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi

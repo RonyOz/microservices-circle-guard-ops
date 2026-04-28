@@ -5,7 +5,7 @@ neo4j:
   # Comprimido para caber en 1 nodo s-2vcpu-4gb junto a Postgres/Kafka/Redis.
   resources:
     cpu: "500m"
-    memory: "1Gi"
+    memory: "2Gi"
 
 volumes:
   data:

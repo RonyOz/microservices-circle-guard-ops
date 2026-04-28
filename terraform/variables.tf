@@ -34,9 +34,9 @@ variable "cluster_name" {
 }
 
 variable "node_size" {
-  description = "Node pool size. s-2vcpu-4gb is the practical minimum for 6 services + infra."
+  description = "Node pool size. s-4vcpu-8gb is the practical minimum for 6 services + infra."
   type        = string
-  default     = "s-2vcpu-4gb"
+  default     = "s-4vcpu-8gb"
 }
 
 variable "node_count" {

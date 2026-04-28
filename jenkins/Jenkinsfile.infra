@@ -82,11 +82,14 @@ pipeline {
 
         stage('Deploy infrastructure') {
             steps {
-                sh '''
-                    chmod +x scripts/deploy-infrastructure.sh
-                    ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"
-                '''
-            }
+                withCredentials([string(credentialsId: 'do-api-token', variable: 'DO_TOKEN')]) {
+                    sh '''
+                        export DIGITALOCEAN_ACCESS_TOKEN="$DO_TOKEN"
+                        mkdir -p "${WORKSPACE}/.kube"
+                        chmod +x scripts/deploy-infrastructure.sh
+                        ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"
+                    '''
+            }}
         }
 
         stage('Verify') {

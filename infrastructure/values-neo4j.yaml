@@ -4,7 +4,7 @@ neo4j:
   passwordFromSecret: neo4j-secret  # secret created by bootstrap-cluster.sh
   # Comprimido para caber en 1 nodo s-2vcpu-4gb junto a Postgres/Kafka/Redis.
   resources:
-    cpu: "200m"
+    cpu: "500m"
     memory: "1Gi"
 
 volumes:

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: gateway-service
+description: Helm chart for CircleGuard gateway-service (validación de acceso al campus)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

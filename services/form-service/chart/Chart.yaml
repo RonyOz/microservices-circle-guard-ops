@@ -1,0 +1,6 @@
+apiVersion: v2
+name: form-service
+description: Helm chart for CircleGuard form-service (encuestas de síntomas)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

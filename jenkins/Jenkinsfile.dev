@@ -46,14 +46,14 @@ pipeline {
 
         stage('Helm lint') {
             steps {
-                sh "helm lint ./${params.SERVICE}/chart"
+                sh "helm lint ./services/${params.SERVICE}/chart"
             }
         }
 
         stage('Deploy -> dev') {
             steps {
                 sh """
-                    helm upgrade --install ${params.SERVICE} ./${params.SERVICE}/chart \\
+                    helm upgrade --install ${params.SERVICE} ./services/${params.SERVICE}/chart \\
                         --namespace ${NAMESPACE} \\
                         --create-namespace \\
                         --set image.repository=${REGISTRY}/${params.SERVICE} \\

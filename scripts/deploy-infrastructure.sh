@@ -1,35 +1,28 @@
 #!/usr/bin/env bash
 # scripts/deploy-infrastructure.sh <namespace>
 #
-# Installs Kafka, PostgreSQL, Neo4j and Redis into the given namespace.
-# Idempotent — safe to re-run.
+# Despliega el chart `circleguard-infra` (Postgres, Neo4j, Kafka, Zookeeper,
+# Redis, OpenLDAP) en el namespace dado. Idempotente — `helm upgrade --install`
+# crea o actualiza el release según corresponda.
+#
+# El chart vive en infrastructure/chart/ y referencia imágenes upstream
+# oficiales (sin Bitnami). Los secrets que consume los crea bootstrap-cluster.sh.
 
 set -euo pipefail
 
 NS="${1:?Usage: $0 <namespace>  (dev|stage|production)}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CHART_DIR="$REPO_ROOT/infrastructure/chart"
+RELEASE_NAME="circleguard-infra"
 
-echo "==> Deploying shared infrastructure to namespace: $NS"
+echo "==> Linting chart"
+helm lint "$CHART_DIR"
 
-helm upgrade --install postgresql bitnami/postgresql \
+echo "==> Deploying release '$RELEASE_NAME' to namespace: $NS"
+helm upgrade --install "$RELEASE_NAME" "$CHART_DIR" \
   --namespace "$NS" \
-  --values "$REPO_ROOT/infrastructure/values-postgresql.yaml" \
-  --set auth.existingSecret=postgresql-secret \
-  --wait --timeout 5m
+  --wait --timeout 10m
 
-helm upgrade --install neo4j neo4j/neo4j \
-  --namespace "$NS" \
-  --values "$REPO_ROOT/infrastructure/values-neo4j.yaml" \
-  --wait --timeout 8m
-
-helm upgrade --install kafka bitnami/kafka \
-  --namespace "$NS" \
-  --values "$REPO_ROOT/infrastructure/values-kafka.yaml" \
-  --wait --timeout 8m
-
-helm upgrade --install redis bitnami/redis \
-  --namespace "$NS" \
-  --values "$REPO_ROOT/infrastructure/values-redis.yaml" \
-  --wait --timeout 5m
-
-echo "[ OK ] Infrastructure deployed to $NS"
+echo ""
+echo "[ OK ] Release '$RELEASE_NAME' deployed to namespace: $NS"
+helm status "$RELEASE_NAME" -n "$NS"

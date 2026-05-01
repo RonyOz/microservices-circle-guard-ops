@@ -1,0 +1,38 @@
+# Defaults compartidos por dev/stage/production.
+# Para overrides por ambiente, usar `helm install -f values-<env>.yaml`.
+
+postgres:
+  image: postgres
+  tag: 16-alpine
+  storage: 2Gi
+
+neo4j:
+  image: neo4j
+  tag: 5.26-community
+  storage: 2Gi
+  heapSize: 512m
+  pageCacheSize: 256m
+
+zookeeper:
+  image: confluentinc/cp-zookeeper
+  tag: 7.6.0
+
+kafka:
+  image: confluentinc/cp-kafka
+  tag: 7.6.0
+
+redis:
+  image: redis
+  tag: 7.2-alpine
+
+openldap:
+  image: osixia/openldap
+  tag: 1.5.0
+  organisation: CircleGuard
+  domain: circleguard.edu
+
+# SMTP capturador para notification-service. No envía correos reales —
+# expone una UI web en puerto 8025 para inspeccionar lo que se "enviaría".
+mailhog:
+  image: mailhog/mailhog
+  tag: v1.0.1

@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // Jenkinsfile.prod  —  CircleGuard ops-repo
 //
-// Triggered by: app-repo webhook on main push
+// Triggered by: app-repo Jenkinsfile on main branch push (GitFlow: release/* merged to main)
 // Environments: production namespace
 // Stages: validate -> unit tests -> deploy -> verify -> release notes
 //
@@ -22,10 +22,10 @@ pipeline {
     environment {
         REGISTRY         = "registry.digitalocean.com/circleguard"
         NAMESPACE        = "production"
-        KUBECONFIG       = credentials('kubeconfig-doks')
-        DO_TOKEN         = credentials('do-api-token')
+        CLUSTER_NAME     = "circleguard-k8s"
+        KUBECONFIG       = "${WORKSPACE}/.kube/config"
         GITHUB_TOKEN     = credentials('github-token')
-        APP_REPO         = "RonyOz/microservices-circle-guard-ops"
+        APP_REPO         = "RonyOz/microservices-circle-guard-dev"
     }
 
     options {
@@ -49,6 +49,19 @@ pipeline {
 
         stage('Checkout') {
             steps { checkout scm }
+        }
+
+        stage('Refresh kubeconfig') {
+            steps {
+                withCredentials([string(credentialsId: 'do-api-token', variable: 'DO_TOKEN')]) {
+                    sh '''
+                        export DIGITALOCEAN_ACCESS_TOKEN="$DO_TOKEN"
+                        mkdir -p "${WORKSPACE}/.kube"
+                        doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
+                        chmod 600 "${WORKSPACE}/.kube/config"
+                    '''
+                }
+            }
         }
 
         // ── Unit tests before touching production ────────────────

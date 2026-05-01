@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // Jenkinsfile.dev  —  CircleGuard ops-repo
 //
-// Triggered by: app-repo webhook (feature/* or develop push)
+// Triggered by: app-repo Jenkinsfile on develop branch push
 // Environments: dev namespace
 // Stages: validate -> lint chart -> deploy -> smoke test
 // ─────────────────────────────────────────────────────────────
@@ -17,8 +17,8 @@ pipeline {
     environment {
         REGISTRY      = "registry.digitalocean.com/circleguard"
         NAMESPACE     = "dev"
-        KUBECONFIG    = credentials('kubeconfig-doks')
-        DO_TOKEN      = credentials('do-api-token')
+        CLUSTER_NAME  = "circleguard-k8s"
+        KUBECONFIG    = "${WORKSPACE}/.kube/config"
     }
 
     options {
@@ -42,6 +42,19 @@ pipeline {
 
         stage('Checkout') {
             steps { checkout scm }
+        }
+
+        stage('Refresh kubeconfig') {
+            steps {
+                withCredentials([string(credentialsId: 'do-api-token', variable: 'DO_TOKEN')]) {
+                    sh '''
+                        export DIGITALOCEAN_ACCESS_TOKEN="$DO_TOKEN"
+                        mkdir -p "${WORKSPACE}/.kube"
+                        doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
+                        chmod 600 "${WORKSPACE}/.kube/config"
+                    '''
+                }
+            }
         }
 
         stage('Helm lint') {

@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // Jenkinsfile.stage  —  CircleGuard ops-repo
 //
-// Triggered by: app-repo webhook on develop -> after dev deploy
+// Triggered by: app-repo Jenkinsfile on release/* branch push
 // Environments: stage namespace
 // Stages: deploy -> unit tests -> integration tests -> E2E -> Locust
 // ─────────────────────────────────────────────────────────────
@@ -15,10 +15,10 @@ pipeline {
     }
 
     environment {
-        REGISTRY   = "registry.digitalocean.com/circleguard"
-        NAMESPACE  = "stage"
-        KUBECONFIG = credentials('kubeconfig-doks')
-        DO_TOKEN   = credentials('do-api-token')
+        REGISTRY      = "registry.digitalocean.com/circleguard"
+        NAMESPACE     = "stage"
+        CLUSTER_NAME  = "circleguard-k8s"
+        KUBECONFIG    = "${WORKSPACE}/.kube/config"
     }
 
     options {
@@ -41,6 +41,19 @@ pipeline {
 
         stage('Checkout') {
             steps { checkout scm }
+        }
+
+        stage('Refresh kubeconfig') {
+            steps {
+                withCredentials([string(credentialsId: 'do-api-token', variable: 'DO_TOKEN')]) {
+                    sh '''
+                        export DIGITALOCEAN_ACCESS_TOKEN="$DO_TOKEN"
+                        mkdir -p "${WORKSPACE}/.kube"
+                        doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
+                        chmod 600 "${WORKSPACE}/.kube/config"
+                    '''
+                }
+            }
         }
 
         stage('Helm lint') {

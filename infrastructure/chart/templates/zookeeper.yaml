@@ -1,11 +1,12 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: zookeeper
   labels:
     app: zookeeper
     circleguard/component: backing-service
 spec:
+  serviceName: zookeeper-headless
   replicas: 1
   selector:
     matchLabels:
@@ -42,6 +43,21 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: zookeeper-headless
+  labels:
+    app: zookeeper
+spec:
+  clusterIP: None
+  selector:
+    app: zookeeper
+  ports:
+    - port: 2181
+      targetPort: 2181
+      name: client
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: zookeeper
   labels:
     app: zookeeper
@@ -51,3 +67,4 @@ spec:
   ports:
     - port: 2181
       targetPort: 2181
+      name: client

@@ -34,8 +34,6 @@ spec:
                   key: NEO4J_AUTH
             - name: NEO4J_PLUGINS
               value: '["apoc"]'
-            - name: NEO4J_server_config_strict_validation__enabled
-              value: "false"
             - name: NEO4J_dbms_connector_bolt_listen__address
               value: ":7687"
             - name: NEO4J_dbms_connector_bolt_advertised__address

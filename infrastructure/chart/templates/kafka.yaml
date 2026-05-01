@@ -57,12 +57,12 @@ spec:
               memory: 768Mi
             limits:
               memory: 1Gi
-          readinessProbe:
-            tcpSocket:
-              port: 9092
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            failureThreshold: 12
+          # readinessProbe:
+          #   tcpSocket:
+          #     port: 9092
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 10
+          #   failureThreshold: 12
 ---
 apiVersion: v1
 kind: Service

@@ -17,6 +17,7 @@ spec:
         app: kafka
         circleguard/component: backing-service
     spec:
+      enableServiceLinks: false
       containers:
         - name: kafka
           image: "{{ .Values.kafka.image }}:{{ .Values.kafka.tag }}"

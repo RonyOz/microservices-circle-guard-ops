@@ -94,16 +94,20 @@ pipeline {
 
         stage('Verify') {
             steps {
-                sh '''
-                    echo "── Pods en $ENVIRONMENT ──"
-                    kubectl get pods -n "$ENVIRONMENT" -o wide
-                    echo
-                    echo "── Servicios en $ENVIRONMENT ──"
-                    kubectl get svc -n "$ENVIRONMENT"
-                    echo
-                    echo "── Helm releases ──"
-                    helm list -n "$ENVIRONMENT"
-                '''
+                withCredentials([string(credentialsId: 'do-api-token', variable: 'DO_TOKEN')]) {
+                    sh '''
+                        export DIGITALOCEAN_ACCESS_TOKEN="$DO_TOKEN"
+                        mkdir -p "${WORKSPACE}/.kube"
+                        echo "── Pods en $ENVIRONMENT ──"
+                        kubectl get pods -n "$ENVIRONMENT" -o wide
+                        echo
+                        echo "── Servicios en $ENVIRONMENT ──"
+                        kubectl get svc -n "$ENVIRONMENT"
+                        echo
+                        echo "── Helm releases ──"
+                        helm list -n "$ENVIRONMENT"
+                    '''
+                }
             }
         }
     }

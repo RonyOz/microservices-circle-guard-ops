@@ -39,8 +39,8 @@ spec:
             - name: KAFKA_LISTENERS
               value: "PLAINTEXT://0.0.0.0:9092"
             - name: KAFKA_ADVERTISED_LISTENERS
-              # value: "PLAINTEXT://kafka-0.kafka-headless:9092"
-              value: "PLAINTEXT://localhost:9092" # Static Variable
+              value: "PLAINTEXT://kafka-0.kafka-headless:9092" # Static Variable
+              # value: "PLAINTEXT://localhost:9092" 
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "PLAINTEXT:PLAINTEXT"
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
@@ -59,12 +59,12 @@ spec:
               memory: 768Mi
             limits:
               memory: 1Gi
-          # readinessProbe:
-          #   tcpSocket:
-          #     port: 9092
-          #   initialDelaySeconds: 30
-          #   periodSeconds: 10
-          #   failureThreshold: 12
+          readinessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 12
 ---
 apiVersion: v1
 kind: Service

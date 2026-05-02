@@ -10,7 +10,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'SERVICE',   defaultValue: '', description: 'e.g. auth-service')
+        string(name: 'SERVICE',   defaultValue: '', description: 'e.g. auth-service or circleguard-auth-service')
         string(name: 'IMAGE_TAG', defaultValue: '', description: 'e.g. sha-abc1234')
     }
 
@@ -35,6 +35,9 @@ pipeline {
                     if (!params.SERVICE?.trim() || !params.IMAGE_TAG?.trim()) {
                         error("SERVICE and IMAGE_TAG are required.")
                     }
+                    // Normalize: strip optional 'circleguard-' prefix sent by app-repo
+                    env.SVC = params.SERVICE.replaceAll(/^circleguard-/, '')
+                    echo "Service: ${env.SVC} | Tag: ${params.IMAGE_TAG} | Env: ${NAMESPACE}"
                 }
             }
         }
@@ -58,17 +61,17 @@ pipeline {
 
         stage('Helm lint') {
             steps {
-                sh "helm lint ./services/${params.SERVICE}/chart"
+                sh "helm lint ./services/${env.SVC}/chart"
             }
         }
 
         stage('Deploy -> stage') {
             steps {
                 sh """
-                    helm upgrade --install ${params.SERVICE} ./services/${params.SERVICE}/chart \\
+                    helm upgrade --install ${env.SVC} ./services/${env.SVC}/chart \\
                         --namespace ${NAMESPACE} \\
                         --create-namespace \\
-                        --set image.repository=${REGISTRY}/${params.SERVICE} \\
+                        --set image.repository=${REGISTRY}/${env.SVC} \\
                         --set image.tag=${params.IMAGE_TAG} \\
                         --wait --timeout 5m
                 """
@@ -78,7 +81,7 @@ pipeline {
         stage('Verify rollout') {
             steps {
                 sh """
-                    kubectl rollout status deployment/${params.SERVICE} \\
+                    kubectl rollout status deployment/${env.SVC} \\
                         -n ${NAMESPACE} --timeout=120s
                 """
             }
@@ -90,8 +93,8 @@ pipeline {
         stage('Unit tests') {
             steps {
                 sh """
-                    kubectl run ${params.SERVICE}-unit-test \\
-                        --image=${REGISTRY}/${params.SERVICE}:${params.IMAGE_TAG} \\
+                    kubectl run ${env.SVC}-unit-test \\
+                        --image=${REGISTRY}/${env.SVC}:${params.IMAGE_TAG} \\
                         --namespace=${NAMESPACE} \\
                         --restart=Never \\
                         --rm --attach \\
@@ -100,7 +103,6 @@ pipeline {
             }
             post {
                 always {
-                    // Collect JUnit XML if present
                     junit allowEmptyResults: true,
                           testResults: '**/test-results/**/*.xml'
                 }
@@ -111,8 +113,8 @@ pipeline {
         stage('Integration tests') {
             steps {
                 sh """
-                    kubectl run ${params.SERVICE}-int-test \\
-                        --image=${REGISTRY}/${params.SERVICE}:${params.IMAGE_TAG} \\
+                    kubectl run ${env.SVC}-int-test \\
+                        --image=${REGISTRY}/${env.SVC}:${params.IMAGE_TAG} \\
                         --namespace=${NAMESPACE} \\
                         --restart=Never \\
                         --rm --attach \\
@@ -134,12 +136,12 @@ pipeline {
         stage('E2E tests') {
             steps {
                 sh """
-                    kubectl run ${params.SERVICE}-e2e-test \\
-                        --image=${REGISTRY}/${params.SERVICE}:${params.IMAGE_TAG} \\
+                    kubectl run ${env.SVC}-e2e-test \\
+                        --image=${REGISTRY}/${env.SVC}:${params.IMAGE_TAG} \\
                         --namespace=${NAMESPACE} \\
                         --restart=Never \\
                         --rm --attach \\
-                        --env="BASE_URL=http://${params.SERVICE}.${NAMESPACE}.svc.cluster.local" \\
+                        --env="BASE_URL=http://${env.SVC}.${NAMESPACE}.svc.cluster.local" \\
                         --command -- sh -c "./gradlew test --tests '*E2E*' || npm run test:e2e || go test ./... -run E2E"
                 """
             }
@@ -155,31 +157,25 @@ pipeline {
         stage('Performance tests (Locust)') {
             steps {
                 sh """
-                    # Run Locust headless from the ops-repo's locust/ directory.
-                    # Locust is installed on the Jenkins agent (pip install locust).
-                    # Target: the service's ClusterIP (Jenkins needs kubectl port-forward
-                    # or the service must be exposed via NodePort/LoadBalancer in stage).
-
-                    SERVICE_PORT=\$(kubectl get svc ${params.SERVICE} \\
+                    SERVICE_PORT=\$(kubectl get svc ${env.SVC} \\
                         -n ${NAMESPACE} \\
                         -o jsonpath='{.spec.ports[0].port}')
 
-                    # Forward port in background
                     kubectl port-forward \\
-                        svc/${params.SERVICE} 18080:\$SERVICE_PORT \\
+                        svc/${env.SVC} 18080:\$SERVICE_PORT \\
                         -n ${NAMESPACE} &
                     PF_PID=\$!
                     sleep 3
 
                     locust \\
-                        -f locust/${params.SERVICE}/locustfile.py \\
+                        -f locust/${env.SVC}/locustfile.py \\
                         --headless \\
                         --host=http://localhost:18080 \\
                         --users=20 \\
                         --spawn-rate=5 \\
                         --run-time=60s \\
-                        --csv=locust-results/${params.SERVICE} \\
-                        --html=locust-results/${params.SERVICE}-report.html
+                        --csv=locust-results/${env.SVC} \\
+                        --html=locust-results/${env.SVC}-report.html
 
                     kill \$PF_PID || true
                 """
@@ -191,8 +187,8 @@ pipeline {
                     publishHTML(target: [
                         allowMissing: true,
                         reportDir:    'locust-results',
-                        reportFiles:  "${params.SERVICE}-report.html",
-                        reportName:   "Locust Report - ${params.SERVICE}"
+                        reportFiles:  "${env.SVC}-report.html",
+                        reportName:   "Locust Report - ${env.SVC}"
                     ])
                 }
             }
@@ -201,12 +197,12 @@ pipeline {
 
     post {
         failure {
-            sh "helm rollback ${params.SERVICE} --namespace ${NAMESPACE} || true"
+            sh "helm rollback ${env.SVC} --namespace ${NAMESPACE} || true"
             echo "[FAIL] Stage pipeline failed - rolled back."
         }
         success {
-            echo "[ OK ] All stage tests passed for ${params.SERVICE}:${params.IMAGE_TAG}."
+            echo "[ OK ] All stage tests passed for ${env.SVC}:${params.IMAGE_TAG}."
         }
-        always { cleanWs() }
+        cleanup { cleanWs() }
     }
 }

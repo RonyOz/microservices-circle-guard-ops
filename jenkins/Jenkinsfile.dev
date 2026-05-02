@@ -10,7 +10,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'SERVICE',   defaultValue: '', description: 'e.g. auth-service')
+        string(name: 'SERVICE',   defaultValue: '', description: 'e.g. auth-service or circleguard-auth-service')
         string(name: 'IMAGE_TAG', defaultValue: '', description: 'e.g. sha-abc1234')
     }
 
@@ -35,7 +35,9 @@ pipeline {
                     if (!params.SERVICE?.trim() || !params.IMAGE_TAG?.trim()) {
                         error("SERVICE and IMAGE_TAG are required.")
                     }
-                    echo "Service: ${params.SERVICE} | Tag: ${params.IMAGE_TAG} | Env: ${NAMESPACE}"
+                    // Normalize: strip optional 'circleguard-' prefix sent by app-repo
+                    env.SVC = params.SERVICE.replaceAll(/^circleguard-/, '')
+                    echo "Service: ${env.SVC} | Tag: ${params.IMAGE_TAG} | Env: ${NAMESPACE}"
                 }
             }
         }
@@ -59,17 +61,17 @@ pipeline {
 
         stage('Helm lint') {
             steps {
-                sh "helm lint ./services/${params.SERVICE}/chart"
+                sh "helm lint ./services/${env.SVC}/chart"
             }
         }
 
         stage('Deploy -> dev') {
             steps {
                 sh """
-                    helm upgrade --install ${params.SERVICE} ./services/${params.SERVICE}/chart \\
+                    helm upgrade --install ${env.SVC} ./services/${env.SVC}/chart \\
                         --namespace ${NAMESPACE} \\
                         --create-namespace \\
-                        --set image.repository=${REGISTRY}/${params.SERVICE} \\
+                        --set image.repository=${REGISTRY}/${env.SVC} \\
                         --set image.tag=${params.IMAGE_TAG} \\
                         --wait --timeout 5m
                 """
@@ -79,10 +81,10 @@ pipeline {
         stage('Smoke test') {
             steps {
                 sh """
-                    kubectl rollout status deployment/${params.SERVICE} \\
+                    kubectl rollout status deployment/${env.SVC} \\
                         -n ${NAMESPACE} --timeout=90s
                     kubectl get pods -n ${NAMESPACE} \\
-                        -l app.kubernetes.io/name=${params.SERVICE}
+                        -l app.kubernetes.io/name=${env.SVC}
                 """
             }
         }
@@ -90,12 +92,12 @@ pipeline {
 
     post {
         failure {
-            sh "helm rollback ${params.SERVICE} --namespace ${NAMESPACE} || true"
+            sh "helm rollback ${env.SVC} --namespace ${NAMESPACE} || true"
             echo "[FAIL] Dev deploy failed - rolled back."
         }
         success {
-            echo "[ OK ] ${params.SERVICE}:${params.IMAGE_TAG} live in dev."
+            echo "[ OK ] ${env.SVC}:${params.IMAGE_TAG} live in dev."
         }
-        always { cleanWs() }
+        cleanup { cleanWs() }
     }
 }

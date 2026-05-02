@@ -42,7 +42,9 @@ pipeline {
                     if (!params.SERVICE?.trim() || !params.IMAGE_TAG?.trim()) {
                         error("SERVICE and IMAGE_TAG are required.")
                     }
-                    echo "Production deploy: ${params.SERVICE}:${params.IMAGE_TAG}"
+                    // Normalize: strip optional 'circleguard-' prefix sent by app-repo
+                    env.SVC = params.SERVICE.replaceAll(/^circleguard-/, '')
+                    echo "Production deploy: ${env.SVC}:${params.IMAGE_TAG}"
                 }
             }
         }
@@ -70,7 +72,7 @@ pipeline {
             steps {
                 sh """
                     docker run --rm \\
-                        ${REGISTRY}/${params.SERVICE}:${params.IMAGE_TAG} \\
+                        ${REGISTRY}/${env.SVC}:${params.IMAGE_TAG} \\
                         sh -c "./gradlew test --tests '*Unit*' || npm test -- --testPathPattern=unit || go test ./... -run Unit"
                 """
             }
@@ -84,7 +86,7 @@ pipeline {
 
         stage('Helm lint') {
             steps {
-                sh "helm lint ./services/${params.SERVICE}/chart"
+                sh "helm lint ./services/${env.SVC}/chart"
             }
         }
 
@@ -93,10 +95,10 @@ pipeline {
         stage('Deploy -> production') {
             steps {
                 sh """
-                    helm upgrade --install ${params.SERVICE} ./services/${params.SERVICE}/chart \\
+                    helm upgrade --install ${env.SVC} ./services/${env.SVC}/chart \\
                         --namespace ${NAMESPACE} \\
                         --create-namespace \\
-                        --set image.repository=${REGISTRY}/${params.SERVICE} \\
+                        --set image.repository=${REGISTRY}/${env.SVC} \\
                         --set image.tag=${params.IMAGE_TAG} \\
                         --atomic \\
                         --timeout 8m
@@ -107,10 +109,10 @@ pipeline {
         stage('Verify rollout') {
             steps {
                 sh """
-                    kubectl rollout status deployment/${params.SERVICE} \\
+                    kubectl rollout status deployment/${env.SVC} \\
                         -n ${NAMESPACE} --timeout=180s
                     kubectl get pods -n ${NAMESPACE} \\
-                        -l app.kubernetes.io/name=${params.SERVICE}
+                        -l app.kubernetes.io/name=${env.SVC}
                 """
             }
         }
@@ -151,7 +153,7 @@ pipeline {
                         cd ..
 
                         # Prepend service + version header
-                        echo "## ${params.SERVICE} - ${version} (${releaseDate})\\n" | \\
+                        echo "## ${env.SVC} - ${version} (${releaseDate})\\n" | \\
                             cat - RELEASE_NOTES.md > RELEASE_NOTES_FINAL.md
 
                         cat RELEASE_NOTES_FINAL.md
@@ -159,9 +161,9 @@ pipeline {
 
                     // Publish as GitHub Release on the app-repo
                     sh """
-                        gh release create "${version}-${params.SERVICE}" \\
+                        gh release create "${version}-${env.SVC}" \\
                             --repo ${APP_REPO} \\
-                            --title "${params.SERVICE} ${version}" \\
+                            --title "${env.SVC} ${version}" \\
                             --notes-file RELEASE_NOTES_FINAL.md \\
                             --target ${params.GIT_COMMIT} || true
                     """
@@ -181,8 +183,8 @@ pipeline {
             echo "[FAIL] Production deploy failed. --atomic ensured automatic rollback."
         }
         success {
-            echo "[ OK ] ${params.SERVICE}:${params.IMAGE_TAG} in production. Release notes published."
+            echo "[ OK ] ${env.SVC}:${params.IMAGE_TAG} in production. Release notes published."
         }
-        always { cleanWs() }
+        cleanup { cleanWs() }
     }
 }

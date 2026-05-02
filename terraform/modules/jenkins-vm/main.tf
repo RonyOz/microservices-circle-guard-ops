@@ -65,6 +65,10 @@ resource "digitalocean_droplet" "jenkins" {
     # Re-own JENKINS_HOME — on droplet recreation the jenkins UID may differ
     # from the one that originally wrote files to the volume.
     chown -R jenkins:jenkins /var/lib/jenkins
+
+    # apt-get install jenkins auto-starts the service. Stop it before usermod
+    # so the process picks up the docker group on next start.
+    systemctl stop jenkins
     usermod -aG docker jenkins
 
     # ---- kubectl ----

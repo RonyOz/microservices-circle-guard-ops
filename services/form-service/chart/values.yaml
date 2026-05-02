@@ -37,5 +37,12 @@ readinessProbe:
   initialDelaySeconds: 20
   periodSeconds: 5
 
-env: {}
-secrets: {}
+env:
+  DB_HOST: "postgres"
+  DB_NAME: "circleguard_form"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+
+envFrom:
+  - secretRef:
+      name: form-service-secret
+      # Keys expected: DB_USERNAME, DB_PASSWORD

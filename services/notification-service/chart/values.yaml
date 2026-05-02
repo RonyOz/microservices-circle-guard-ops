@@ -37,9 +37,10 @@ readinessProbe:
   initialDelaySeconds: 20
   periodSeconds: 5
 
-env: {}
-  # Example — overridden per environment via --set or values file:
-  # SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/circleguard
+env:
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
 
-secrets: {}
-  # Mounted from K8s secrets — never stored in this file
+envFrom:
+  - secretRef:
+      name: notification-service-secret
+      # Keys expected: JWT_SECRET

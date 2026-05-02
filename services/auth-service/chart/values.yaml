@@ -37,9 +37,12 @@ readinessProbe:
   initialDelaySeconds: 20
   periodSeconds: 5
 
-env: {}
-  # Example — overridden per environment via --set or values file:
-  # SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/circleguard
+env:
+  DB_HOST: "postgres"
+  DB_NAME: "circleguard_auth"
+  LDAP_HOST: "openldap"
 
-secrets: {}
-  # Mounted from K8s secrets — never stored in this file
+envFrom:
+  - secretRef:
+      name: auth-service-secret
+      # Keys expected: DB_USERNAME, DB_PASSWORD, JWT_SECRET

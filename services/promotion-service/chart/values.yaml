@@ -23,11 +23,19 @@ autoscaling:
   maxReplicas: 3
   targetCPUUtilizationPercentage: 80
 
+startupProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8086
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 12
+
 livenessProbe:
   httpGet:
     path: /actuator/health/liveness
     port: 8086
-  initialDelaySeconds: 30
+  initialDelaySeconds: 0
   periodSeconds: 10
 
 readinessProbe:

@@ -44,11 +44,17 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
+            - name: init-db
+              mountPath: /docker-entrypoint-initdb.d
           readinessProbe:
             exec:
               command: [pg_isready, -U, admin, -d, circleguard]
             initialDelaySeconds: 10
             periodSeconds: 5
+      volumes:
+        - name: init-db
+          configMap:
+            name: postgres-init-db
   volumeClaimTemplates:
     - metadata:
         name: data

@@ -43,9 +43,9 @@ pipeline {
                     if (!params.SERVICE?.trim() || !params.IMAGE_TAG?.trim()) {
                         error("SERVICE and IMAGE_TAG are required.")
                     }
-                    // Normalize: strip optional 'circleguard-' prefix sent by app-repo
-                    env.SVC = params.SERVICE.replaceAll(/^circleguard-/, '')
-                    echo "Production deploy: ${env.SVC}:${params.IMAGE_TAG}"
+                    env.SVC = params.SERVICE.trim().replaceAll(/^circleguard-/, '')
+                    env.TAG = params.IMAGE_TAG.trim()
+                    echo "Production deploy: ${env.SVC}:${env.TAG}"
                 }
             }
         }
@@ -70,7 +70,7 @@ pipeline {
             steps {
                 sh """
                     docker run --rm \\
-                        ${REGISTRY}/${env.SVC}:${params.IMAGE_TAG} \\
+                        ${REGISTRY}/${env.SVC}:${env.TAG} \\
                         sh -c "./gradlew test --tests '*Unit*' || npm test -- --testPathPattern=unit || go test ./... -run Unit"
                 """
             }
@@ -97,7 +97,7 @@ pipeline {
                         --namespace ${NAMESPACE} \\
                         --create-namespace \\
                         --set image.repository=${REGISTRY}/${env.SVC} \\
-                        --set image.tag=${params.IMAGE_TAG} \\
+                        --set image.tag=${env.TAG} \\
                         --atomic \\
                         --timeout 8m
                 """
@@ -129,7 +129,7 @@ pipeline {
             }
             steps {
                 script {
-                    def version = params.VERSION?.trim() ?: "sha-${params.IMAGE_TAG}"
+                    def version = params.VERSION?.trim() ?: "sha-${env.TAG}"
                     def releaseDate = new Date().format("yyyy-MM-dd")
 
                     sh """
@@ -181,7 +181,7 @@ pipeline {
             echo "[FAIL] Production deploy failed. --atomic ensured automatic rollback."
         }
         success {
-            echo "[ OK ] ${env.SVC}:${params.IMAGE_TAG} in production. Release notes published."
+            echo "[ OK ] ${env.SVC}:${env.TAG} in production. Release notes published."
         }
         cleanup { cleanWs() }
     }

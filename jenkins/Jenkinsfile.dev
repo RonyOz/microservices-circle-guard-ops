@@ -36,9 +36,9 @@ pipeline {
                     if (!params.SERVICE?.trim() || !params.IMAGE_TAG?.trim()) {
                         error("SERVICE and IMAGE_TAG are required.")
                     }
-                    // Normalize: strip optional 'circleguard-' prefix sent by app-repo
-                    env.SVC = params.SERVICE.replaceAll(/^circleguard-/, '')
-                    echo "Service: ${env.SVC} | Tag: ${params.IMAGE_TAG} | Env: ${NAMESPACE}"
+                    env.SVC = params.SERVICE.trim().replaceAll(/^circleguard-/, '')
+                    env.TAG = params.IMAGE_TAG.trim()
+                    echo "Service: ${env.SVC} | Tag: ${env.TAG} | Env: ${NAMESPACE}"
                 }
             }
         }
@@ -70,7 +70,7 @@ pipeline {
                         --namespace ${NAMESPACE} \\
                         --create-namespace \\
                         --set image.repository=${REGISTRY}/${env.SVC} \\
-                        --set image.tag=${params.IMAGE_TAG} \\
+                        --set image.tag=${env.TAG} \\
                         --wait --timeout 5m
                 """
             }
@@ -94,7 +94,7 @@ pipeline {
             echo "[FAIL] Dev deploy failed - rolled back."
         }
         success {
-            echo "[ OK ] ${env.SVC}:${params.IMAGE_TAG} live in dev."
+            echo "[ OK ] ${env.SVC}:${env.TAG} live in dev."
         }
         cleanup { cleanWs() }
     }

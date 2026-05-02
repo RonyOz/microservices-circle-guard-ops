@@ -36,9 +36,9 @@ pipeline {
                     if (!params.SERVICE?.trim() || !params.IMAGE_TAG?.trim()) {
                         error("SERVICE and IMAGE_TAG are required.")
                     }
-                    // Normalize: strip optional 'circleguard-' prefix sent by app-repo
-                    env.SVC = params.SERVICE.replaceAll(/^circleguard-/, '')
-                    echo "Service: ${env.SVC} | Tag: ${params.IMAGE_TAG} | Env: ${NAMESPACE}"
+                    env.SVC = params.SERVICE.trim().replaceAll(/^circleguard-/, '')
+                    env.TAG = params.IMAGE_TAG.trim()
+                    echo "Service: ${env.SVC} | Tag: ${env.TAG} | Env: ${NAMESPACE}"
                 }
             }
         }
@@ -70,7 +70,7 @@ pipeline {
                         --namespace ${NAMESPACE} \\
                         --create-namespace \\
                         --set image.repository=${REGISTRY}/${env.SVC} \\
-                        --set image.tag=${params.IMAGE_TAG} \\
+                        --set image.tag=${env.TAG} \\
                         --wait --timeout 5m
                 """
             }
@@ -92,7 +92,7 @@ pipeline {
             steps {
                 sh """
                     kubectl run ${env.SVC}-unit-test \\
-                        --image=${REGISTRY}/${env.SVC}:${params.IMAGE_TAG} \\
+                        --image=${REGISTRY}/${env.SVC}:${env.TAG} \\
                         --namespace=${NAMESPACE} \\
                         --restart=Never \\
                         --rm --attach \\
@@ -112,7 +112,7 @@ pipeline {
             steps {
                 sh """
                     kubectl run ${env.SVC}-int-test \\
-                        --image=${REGISTRY}/${env.SVC}:${params.IMAGE_TAG} \\
+                        --image=${REGISTRY}/${env.SVC}:${env.TAG} \\
                         --namespace=${NAMESPACE} \\
                         --restart=Never \\
                         --rm --attach \\
@@ -135,7 +135,7 @@ pipeline {
             steps {
                 sh """
                     kubectl run ${env.SVC}-e2e-test \\
-                        --image=${REGISTRY}/${env.SVC}:${params.IMAGE_TAG} \\
+                        --image=${REGISTRY}/${env.SVC}:${env.TAG} \\
                         --namespace=${NAMESPACE} \\
                         --restart=Never \\
                         --rm --attach \\
@@ -199,7 +199,7 @@ pipeline {
             echo "[FAIL] Stage pipeline failed - rolled back."
         }
         success {
-            echo "[ OK ] All stage tests passed for ${env.SVC}:${params.IMAGE_TAG}."
+            echo "[ OK ] All stage tests passed for ${env.SVC}:${env.TAG}."
         }
         cleanup { cleanWs() }
     }

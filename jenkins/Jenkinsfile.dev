@@ -15,10 +15,11 @@ pipeline {
     }
 
     environment {
-        REGISTRY      = "registry.digitalocean.com/circleguard"
-        NAMESPACE     = "dev"
-        CLUSTER_NAME  = "circleguard-k8s"
-        KUBECONFIG    = "${WORKSPACE}/.kube/config"
+        REGISTRY                    = "registry.digitalocean.com/circleguard"
+        NAMESPACE                   = "dev"
+        CLUSTER_NAME                = "circleguard-k8s"
+        KUBECONFIG                  = "${WORKSPACE}/.kube/config"
+        DIGITALOCEAN_ACCESS_TOKEN   = credentials('do-api-token')
     }
 
     options {
@@ -48,14 +49,11 @@ pipeline {
 
         stage('Refresh kubeconfig') {
             steps {
-                withCredentials([string(credentialsId: 'do-api-token', variable: 'DO_TOKEN')]) {
-                    sh '''
-                        export DIGITALOCEAN_ACCESS_TOKEN="$DO_TOKEN"
-                        mkdir -p "${WORKSPACE}/.kube"
-                        doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
-                        chmod 600 "${WORKSPACE}/.kube/config"
-                    '''
-                }
+                sh '''
+                    mkdir -p "${WORKSPACE}/.kube"
+                    doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
+                    chmod 600 "${WORKSPACE}/.kube/config"
+                '''
             }
         }
 

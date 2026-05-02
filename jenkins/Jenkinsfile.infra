@@ -25,13 +25,10 @@ pipeline {
     }
 
     environment {
-        CLUSTER_NAME              = 'circleguard-k8s'
-        REGISTRY_NAME             = 'circleguard'
-        // Note: do not inject the DO token globally. We'll bind it only in the
-        // stage that needs it to reduce blast radius.
-        // Kubeconfig generado fresco por doctl en cada build. Usa un path
-        // escribible del workspace, no la credencial Secret file (que es 0400).
-        KUBECONFIG                = "${WORKSPACE}/.kube/config"
+        CLUSTER_NAME                = 'circleguard-k8s'
+        REGISTRY_NAME               = 'circleguard'
+        KUBECONFIG                  = "${WORKSPACE}/.kube/config"
+        DIGITALOCEAN_ACCESS_TOKEN   = credentials('do-api-token')
     }
 
     options {
@@ -47,34 +44,56 @@ pipeline {
         }
 
         stage('Refresh kubeconfig') {
-            // Genera un kubeconfig fresco en $WORKSPACE/.kube/config usando
-            // el token DO. Inmune a recreaciones del cluster — no depende de
-            // ninguna credencial Jenkins más allá de do-api-token.
             steps {
-                withCredentials([string(credentialsId: 'do-api-token', variable: 'DO_TOKEN')]) {
-                    sh '''
-                        export DIGITALOCEAN_ACCESS_TOKEN="$DO_TOKEN"
-                        mkdir -p "${WORKSPACE}/.kube"
-                        export KUBECONFIG="${WORKSPACE}/.kube/config"
-                        doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
-                        chmod 600 "${WORKSPACE}/.kube/config"
-                        kubectl --kubeconfig "${WORKSPACE}/.kube/config" cluster-info
-                    '''
-                }
+                sh '''
+                    mkdir -p "${WORKSPACE}/.kube"
+                    doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
+                    chmod 600 "${WORKSPACE}/.kube/config"
+                    kubectl cluster-info
+                '''
             }
         }
 
         stage('Bootstrap cluster') {
             when { expression { return params.RUN_BOOTSTRAP } }
             steps {
-                withCredentials([string(credentialsId: 'do-api-token', variable: 'DO_TOKEN')]) {
+                sh '''
+                    chmod +x scripts/bootstrap-cluster.sh
+                    ./scripts/bootstrap-cluster.sh "$CLUSTER_NAME" "$REGISTRY_NAME"
+                '''
+            }
+        }
+
+        stage('Sync infrastructure secrets') {
+            // Creates K8s secrets required by postgres, neo4j and openldap before
+            // helm deploys them. Idempotent: --dry-run=client | apply never fails
+            // if secret already exists — it just updates it.
+            steps {
+                withCredentials([
+                    usernamePassword(credentialsId: 'db-credentials',
+                                     usernameVariable: 'DB_USER', passwordVariable: 'DB_PASS'),
+                    string(credentialsId: 'jwt-secret', variable: 'JWT_SEC')
+                ]) {
                     sh '''
-                        export DIGITALOCEAN_ACCESS_TOKEN="$DO_TOKEN"
-                        mkdir -p "${WORKSPACE}/.kube"
-                        export KUBECONFIG="${WORKSPACE}/.kube/config"
-                        chmod +x scripts/bootstrap-cluster.sh
-                        ./scripts/bootstrap-cluster.sh "$CLUSTER_NAME" "$REGISTRY_NAME"
-                        chmod 600 "${WORKSPACE}/.kube/config" || true
+                        NS="$ENVIRONMENT"
+
+                        # postgres-secret — POSTGRES_PASSWORD
+                        kubectl create secret generic postgres-secret \
+                            --from-literal=password="$DB_PASS" \
+                            --namespace="$NS" \
+                            --dry-run=client -o yaml | kubectl apply -f -
+
+                        # neo4j-secret — NEO4J_AUTH format: "neo4j/<password>"
+                        kubectl create secret generic neo4j-secret \
+                            --from-literal=NEO4J_AUTH="neo4j/$DB_PASS" \
+                            --namespace="$NS" \
+                            --dry-run=client -o yaml | kubectl apply -f -
+
+                        # openldap-secret — admin-password
+                        kubectl create secret generic openldap-secret \
+                            --from-literal=admin-password="$DB_PASS" \
+                            --namespace="$NS" \
+                            --dry-run=client -o yaml | kubectl apply -f -
                     '''
                 }
             }
@@ -82,32 +101,25 @@ pipeline {
 
         stage('Deploy infrastructure') {
             steps {
-                withCredentials([string(credentialsId: 'do-api-token', variable: 'DO_TOKEN')]) {
-                    sh '''
-                        export DIGITALOCEAN_ACCESS_TOKEN="$DO_TOKEN"
-                        mkdir -p "${WORKSPACE}/.kube"
-                        chmod +x scripts/deploy-infrastructure.sh
-                        ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"
-                    '''
-            }}
+                sh '''
+                    chmod +x scripts/deploy-infrastructure.sh
+                    ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"
+                '''
+            }
         }
 
         stage('Verify') {
             steps {
-                withCredentials([string(credentialsId: 'do-api-token', variable: 'DO_TOKEN')]) {
-                    sh '''
-                        export DIGITALOCEAN_ACCESS_TOKEN="$DO_TOKEN"
-                        mkdir -p "${WORKSPACE}/.kube"
-                        echo "── Pods en $ENVIRONMENT ──"
-                        kubectl get pods -n "$ENVIRONMENT" -o wide
-                        echo
-                        echo "── Servicios en $ENVIRONMENT ──"
-                        kubectl get svc -n "$ENVIRONMENT"
-                        echo
-                        echo "── Helm releases ──"
-                        helm list -n "$ENVIRONMENT"
-                    '''
-                }
+                sh '''
+                    echo "── Pods en $ENVIRONMENT ──"
+                    kubectl get pods -n "$ENVIRONMENT" -o wide
+                    echo
+                    echo "── Servicios en $ENVIRONMENT ──"
+                    kubectl get svc -n "$ENVIRONMENT"
+                    echo
+                    echo "── Helm releases ──"
+                    helm list -n "$ENVIRONMENT"
+                '''
             }
         }
     }

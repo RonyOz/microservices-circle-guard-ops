@@ -15,7 +15,7 @@ pipeline {
     }
 
     environment {
-        REGISTRY                    = "registry.digitalocean.com/circleguard"
+        REGISTRY_REPOSITORY         = "registry.digitalocean.com/circleguard/circleguard-services"
         NAMESPACE                   = "dev"
         CLUSTER_NAME                = "circleguard-k8s"
         KUBECONFIG                  = "${WORKSPACE}/.kube/config"
@@ -91,8 +91,8 @@ pipeline {
                     helm upgrade --install ${env.SVC} ./services/${env.SVC}/chart \\
                         --namespace ${NAMESPACE} \\
                         --create-namespace \\
-                        --set image.repository=${REGISTRY}/${env.SVC} \\
-                        --set image.tag=${env.TAG} \\
+                        --set image.repository=${REGISTRY_REPOSITORY} \\
+                        --set image.tag=${env.SVC}-${env.TAG} \\
                         --wait --timeout 5m
                 """
             }

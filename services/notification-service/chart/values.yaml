@@ -1,9 +1,9 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/circleguard/notification-service
+  repository: registry.digitalocean.com/circleguard/circleguard-services
   pullPolicy: IfNotPresent
-  tag: ""  # Overridden by pipeline: --set image.tag=sha-<commit>
+  tag: ""  # Overridden by pipeline: --set image.tag=<service>-sha-<commit>
 
 service:
   type: ClusterIP

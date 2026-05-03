@@ -13,6 +13,14 @@ neo4j:
   heapSize: 512m
   pageCacheSize: 256m
 
+persistence:
+  # Use the standard DOKS StorageClass so dynamically-provisioned block
+  # volumes are removed with the PVC/PV lifecycle.
+  storageClassName: do-block-storage
+  pvcRetentionPolicy:
+    whenDeleted: Delete
+    whenScaled: Delete
+
 zookeeper:
   image: confluentinc/cp-zookeeper
   tag: 7.6.0

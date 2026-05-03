@@ -42,7 +42,8 @@ circleguard-ops/
 │
 ├── scripts/
 │   ├── bootstrap-cluster.sh           # Ejecutar UNA VEZ tras terraform apply
-│   └── deploy-infrastructure.sh       # Instalar Kafka/PG/Neo4j/Redis en un namespace
+│   ├── deploy-infrastructure.sh       # Instalar Kafka/PG/Neo4j/Redis en un namespace
+│   └── down-cluster.sh                # Puede limpiar volúmenes pvc-* huérfanos (opcional)
 │
 └── cliff.toml                         # Configuración git-cliff (release notes)
 ```
@@ -130,6 +131,18 @@ chmod +x scripts/deploy-infrastructure.sh
 ```
 
 Instala PostgreSQL, Neo4j, Kafka y Redis en cada namespace.
+
+> Los StatefulSets de Postgres/Neo4j usan `persistentVolumeClaimRetentionPolicy=Delete` y `storageClassName=do-block-storage` para evitar que PVC/PV queden huérfanos al desinstalar el chart.
+
+### Limpieza de volúmenes huérfanos al bajar el clúster
+
+```bash
+# Teardown normal (no borra volúmenes pvc-* automáticamente)
+./scripts/down-cluster.sh
+
+# Teardown + borrado de volúmenes pvc-* no adjuntos
+PRUNE_PVC_VOLUMES=true ./scripts/down-cluster.sh
+```
 
 ### 5. Configurar Jenkins
 

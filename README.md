@@ -66,6 +66,18 @@ Jenkins webhook recibido
     └── Jenkinsfile.prod  → namespace production (unit tests + deploy --atomic + release notes)
 ```
 
+### Convención de imágenes (DOCR starter)
+
+Para soportar el límite de **1 repositorio** del tier starter de DOCR, todos los servicios publican en:
+
+`registry.digitalocean.com/circleguard/circleguard-services`
+
+La diferenciación por microservicio se hace en el tag:
+
+`<service>-sha-<commit>`
+
+Ejemplo: `auth-service-sha-a1b2c3d`
+
 ---
 
 ## Primeros pasos

@@ -56,3 +56,9 @@ variable "registry_region" {
   type        = string
   default     = "nyc3"
 }
+
+variable "registry_subscription_tier" {
+  description = "DOCR subscription tier: starter (500MB free), basic ($5/mo 5GB), professional ($20/mo 100GB)."
+  type        = string
+  default     = "basic"
+}

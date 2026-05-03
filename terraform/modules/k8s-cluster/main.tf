@@ -17,7 +17,7 @@ data "digitalocean_kubernetes_versions" "current" {
 # because DOCR only runs in nyc3/sfo3/ams3/sgp1/fra1/syd1.
 resource "digitalocean_container_registry" "registry" {
   name                   = var.registry_name
-  subscription_tier_slug = "starter"
+  subscription_tier_slug = var.registry_subscription_tier
   region                 = var.registry_region
 }
 

@@ -11,3 +11,9 @@ variable "k8s_version_prefix" {
   type        = string
   default     = "1.33."
 }
+
+variable "registry_subscription_tier" {
+  description = "DOCR subscription tier: starter (500MB free), basic ($5/mo 5GB), professional ($20/mo 100GB)."
+  type        = string
+  default     = "basic"
+}

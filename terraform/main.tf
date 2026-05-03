@@ -67,6 +67,7 @@ module "k8s_cluster" {
   node_size       = var.node_size
   node_count      = var.node_count
   registry_name   = var.registry_name
-  registry_region = var.registry_region
-  vpc_uuid        = digitalocean_vpc.main.id
+  registry_region            = var.registry_region
+  registry_subscription_tier = var.registry_subscription_tier
+  vpc_uuid                   = digitalocean_vpc.main.id
 }

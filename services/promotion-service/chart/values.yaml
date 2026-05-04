@@ -55,4 +55,4 @@ env:
 envFrom:
   - secretRef:
       name: promotion-service-secret
-      # Keys expected: DB_USERNAME, DB_PASSWORD
+      # Keys expected: DB_USERNAME, DB_PASSWORD, NEO4J_USERNAME, NEO4J_PASSWORD

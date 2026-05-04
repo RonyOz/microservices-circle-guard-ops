@@ -71,6 +71,8 @@ pipeline {
                         kubectl create secret generic ${env.SVC}-secret \\
                             --from-literal=DB_USERNAME="\${DB_USER}" \\
                             --from-literal=DB_PASSWORD="\${DB_PASS}" \\
+                            --from-literal=NEO4J_USERNAME="neo4j" \\
+                            --from-literal=NEO4J_PASSWORD="\${DB_PASS}" \\
                             --from-literal=JWT_SECRET="\${JWT_SEC}" \\
                             --namespace=${NAMESPACE} \\
                             --dry-run=client -o yaml | kubectl apply -f -

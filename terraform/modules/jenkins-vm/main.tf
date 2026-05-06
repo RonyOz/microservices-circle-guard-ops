@@ -84,10 +84,29 @@ resource "digitalocean_droplet" "jenkins" {
       | tar -xz -C /tmp
     mv /tmp/doctl /usr/local/bin/
 
+    # ---- Jenkins timezone override (Bogotá) ----
+    mkdir -p /etc/systemd/system/jenkins.service.d
+    cat > /etc/systemd/system/jenkins.service.d/timezone.conf <<'EOF_TZ'
+    [Service]
+    Environment="JAVA_OPTS=-Duser.timezone=America/Bogota"
+    EOF_TZ
+    systemctl daemon-reload
+
     systemctl enable --now jenkins
   CLOUD_INIT
 
   tags = ["circleguard", "jenkins", "ci"]
+}
+
+# Reserved (floating) IP. Survives droplet destroy/recreate so the GitHub
+# webhook URL stays stable across teardowns. Free while assigned.
+resource "digitalocean_reserved_ip" "jenkins" {
+  region = var.do_region
+}
+
+resource "digitalocean_reserved_ip_assignment" "jenkins" {
+  ip_address = digitalocean_reserved_ip.jenkins.ip_address
+  droplet_id = digitalocean_droplet.jenkins.id
 }
 
 # Firewall: only allow SSH + Jenkins UI + outbound

@@ -34,15 +34,15 @@ variable "cluster_name" {
 }
 
 variable "node_size" {
-  description = "Node pool size. s-4vcpu-8gb is the practical minimum for 6 services + infra."
+  description = "Node pool size. s-4vcpu-8gb is the largest slug DOKS exposes on starter accounts. Larger sizes (s-8vcpu-16gb, m-2vcpu-16gb, etc.) require account upgrade and are not returned by doks-list-options."
   type        = string
   default     = "s-4vcpu-8gb"
 }
 
 variable "node_count" {
-  description = "Number of nodes. 1 is enough for the taller."
+  description = "2 nodes × 8 GB = 16 GB allocatable. Fits one full namespace (infra stack + 7 microservices ~7-8 GB) with headroom for Jenkins-triggered rollouts. With droplet_limit=3 (Jenkins + 2 DOKS nodes), running dev+stage+prod concurrently is not possible — cycle namespaces between deploys."
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "registry_name" {

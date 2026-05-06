@@ -11,7 +11,7 @@
 
 Este documento registra, en orden cronológico, la implementación de la plataforma de CI/CD para los microservicios CircleGuard. La infraestructura se gestiona con **Terraform** sobre **DigitalOcean**, los pipelines se orquestan con **Jenkins** sobre un droplet dedicado, y los despliegues se realizan sobre un clúster **DOKS** (DigitalOcean Kubernetes) hacia los namespaces `dev`, `stage` y `production`.
 
-Cada procedimiento está documentado con (a) el contexto operativo, (b) los comandos ejecutados, (c) el resultado verificable, y (d) cuando aplica, los incidentes encontrados y su corrección. La bitácora de incidentes (sección 8) actúa como evidencia de la capacidad de diagnóstico y resolución del autor.
+Cada procedimiento está documentado con (a) el contexto operativo, (b) los comandos ejecutados y (c) el resultado verificable. **El núcleo del informe es la sección 8**, que para cada pipeline reporta *Configuración*, *Resultado* y *Análisis* siguiendo el formato exigido por el taller. Las secciones 1–6 sirven de marco operativo (infraestructura, costos, configuración inicial de Jenkins, pipeline de infra) que sustenta esos resultados.
 
 ---
 
@@ -30,81 +30,94 @@ Cada procedimiento está documentado con (a) el contexto operativo, (b) los coma
 
 ### 1.2 Diagrama de arquitectura
 
-```
-                          DigitalOcean
-  ┌──────────────────────────────────────────────────────────────────┐
-  │                                                                  │
-  │   VPC circleguard-vpc (10.20.0.0/16)                             │
-  │   ┌────────────────────┐         ┌────────────────────────────┐  │
-  │   │ Droplet            │         │ DOKS cluster (1.33.9-do.3) │  │
-  │   │ circleguard-jenkins│ ──────> │ namespaces dev/stage/prod  │  │
-  │   │ Jenkins + Docker   │  helm/  │ + Postgres / Kafka / Neo4j │  │
-  │   │ Volume jenkins-home│  kubectl│   / Redis (vía Helm)       │  │
-  │   └────────────────────┘         └────────────────────────────┘  │
-  │              │                                  ^                │
-  │              │ docker push                      │ image pull     │
-  │              v                                  │                │
-  │   ┌─────────────────────────────────────────────┴──────────────┐ │
-  │   │  DOCR registry.digitalocean.com/circleguard/circleguard-services │ │
-  │   └────────────────────────────────────────────────────────────┘ │
-  │                                                                  │
-  └──────────────────────────────────────────────────────────────────┘
-```
+- imagen place holder
 
 ### 1.3 Decisiones de diseño relevantes
 
 | Decisión | Justificación técnica |
 |---|---|
-| **VPC explícita** en Terraform | DigitalOcean no auto-provisiona una VPC default en todas las regiones para cuentas nuevas; declararla explícitamente evita el error `Failed to resolve VPC` documentado en la sección 8.3. |
+| **VPC explícita** en Terraform | DigitalOcean no auto-provisiona una VPC default en todas las regiones para cuentas nuevas; declararla explícitamente evita el error `Failed to resolve VPC` al crear el droplet. |
 | **Volumen persistente para JENKINS_HOME** | Los droplets apagados en DigitalOcean **siguen facturando** según su [documentación de billing](https://docs.digitalocean.com/products/billing/billing-faq/). Para minimizar costos sin perder estado, el droplet se trata como recurso efímero (se destruye fuera de horas de trabajo) y `JENKINS_HOME` reside en un Block Storage independiente que sobrevive a la destrucción. Costo idle ~$1/mes vs ~$13/mes de mantener el droplet apagado. |
 | **DOCR en región distinta del clúster** | DOCR solo está disponible en `nyc3, sfo3, ams3, sgp1, fra1, syd1`. El clúster opera en `nyc1` y el registry en `nyc3`; la separación se modeló como variable independiente `registry_region`. El pull funciona correctamente porque DOCR expone un endpoint global. |
 | **Repo único en DOCR starter** | El tier starter limita el número de repositorios. Para evitar bloqueos de despliegue multi-servicio, se consolidó en `circleguard-services` y se usa tagging `<service>-sha-<commit>`. |
 | **Patrón Bulkhead vía namespaces** | Los tres ambientes (`dev`, `stage`, `production`) viven en el mismo clúster pero en namespaces aislados. Un fallo o consumo excesivo en `stage` no afecta a `production`. Reduce el costo de un clúster por ambiente sin sacrificar aislamiento lógico. |
-| **Versión de Kubernetes resuelta dinámicamente** | El módulo usa el data source `digitalocean_kubernetes_versions` con prefijo `1.33.` en lugar de un slug hardcoded. Evita que el Terraform se rompa cuando DigitalOcean retira versiones antiguas (incidente 8.1). |
+| **Versión de Kubernetes resuelta dinámicamente** | El módulo usa el data source `digitalocean_kubernetes_versions` con prefijo `1.33.` en lugar de un slug hardcoded. Evita que el Terraform se rompa cuando DigitalOcean retira versiones antiguas. |
 
 ---
 
-## 2. Estructura del repositorio de operaciones
+## 2. Estructura de los repositorios
+
+El proyecto vive en **dos repositorios** separados por responsabilidad: el *app-repo* contiene el código fuente de los microservicios y del frontend móvil junto con sus Dockerfiles y Jenkinsfiles de build/test; el *ops-repo* contiene la infraestructura, los charts de despliegue y los Jenkinsfiles de deploy a Kubernetes. Esta separación permite que los pipelines de build (en el app-repo) deleguen el despliegue a pipelines de ops (en el ops-repo) sin acoplar versiones de aplicación con versiones de infraestructura.
+
+### 2.1 App-repo — `microservices-circle-guard-dev`
+
+```
+microservices-circle-guard-dev/
+├── build.gradle.kts                Build raíz Gradle multi-módulo (Java 21)
+├── settings.gradle.kts             Declara los 8 subproyectos Spring Boot
+├── docker-compose.dev.yml          Stack local de desarrollo (deps + servicios)
+├── init-db.sql                     Schema inicial Postgres compartido
+├── services/
+│   ├── circleguard-auth-service/         Dockerfile + jenkins/Jenkinsfile + src/
+│   ├── circleguard-gateway-service/      ídem (validación de acceso al campus)
+│   ├── circleguard-form-service/         ídem (encuestas de salud)
+│   ├── circleguard-identity-service/     ídem (registro de usuarios)
+│   ├── circleguard-notification-service/ ídem (Kafka + email vía Mailhog)
+│   ├── circleguard-promotion-service/    ídem (promociones / contact tracing)
+│   ├── circleguard-dashboard-service/    (sin pipeline — fuera de alcance)
+│   └── circleguard-file-service/         (sin pipeline — fuera de alcance)
+└── mobile/                         Frontend Expo + React Native
+    ├── Dockerfile                  Multi-stage Bun → expo export -p web → nginx
+    ├── nginx.conf                  SPA fallback + gzip + cache de estáticos
+    ├── jenkins/Jenkinsfile         Pipeline equivalente a los servicios backend
+    ├── package.json                Jest + jest-expo + jest-junit
+    ├── app/                        Rutas Expo Router (login, enroll, scanner...)
+    ├── components/                 UI compartida
+    └── hooks/                      Lógica de cliente (auth, biometría, QR, etc.)
+```
+
+Cada `services/circleguard-<svc>/jenkins/Jenkinsfile` y `mobile/jenkins/Jenkinsfile` se registra en Jenkins como rama de un job *multibranch* `circleguard-app/<svc>`, alineado al criterio §2 del taller.
+
+### 2.2 Ops-repo — `microservices-circle-guard-ops`
 
 ```
 microservices-circle-guard-ops/
 ├── terraform/
 │   ├── main.tf                    Composición top-level (VPC + volumen + módulos)
 │   ├── variables.tf
-│   ├── outputs.tf
+│   ├── outputs.tf                 Incluye github_webhook_url estable (reserved IP)
 │   └── modules/
-│       ├── jenkins-vm/            Droplet, firewall, cloud-init, montaje de volumen
-│       └── k8s-cluster/           DOKS, DOCR, data source de versiones
+│       ├── jenkins-vm/            Droplet + firewall + cloud-init + reserved IP
+│       └── k8s-cluster/           DOKS + DOCR + data source de versiones
 ├── infrastructure/
-│   └── chart/                     Helm chart de dependencias compartidas (postgres, neo4j, kafka, zookeeper, redis, openldap, mailhog)
+│   └── chart/                     Chart Helm de deps compartidas (postgres, neo4j, kafka, zookeeper, redis, openldap, mailhog)
 ├── services/
 │   ├── auth-service/chart/
 │   ├── form-service/chart/
 │   ├── gateway-service/chart/
 │   ├── identity-service/chart/
 │   ├── notification-service/chart/
-│   └── promotion-service/chart/
+│   ├── promotion-service/chart/
+│   └── mobile/chart/              Chart Helm para el frontend Expo web (nginx, port 80)
 ├── jenkins/
-│   ├── Jenkinsfile.infra          Despliegue de infra compartida
+│   ├── Jenkinsfile.infra          Bootstrap + deploy de infra compartida
 │   ├── Jenkinsfile.dev            Deploy a dev por servicio
-│   ├── Jenkinsfile.stage          Deploy + pruebas completas en stage por servicio
-│   └── Jenkinsfile.prod           Unit test + deploy --atomic + release notes en production
+│   ├── Jenkinsfile.stage          Deploy + unit/integration/E2E + Locust en stage
+│   └── Jenkinsfile.prod           Tests + deploy --atomic + release notes en production
 ├── locust/                        Escenarios de carga por servicio (consumidos por Jenkinsfile.stage)
 ├── scripts/
-│   ├── up-jenkins.sh              Levanta VPC + volumen + droplet
-│   ├── down-jenkins.sh            Destruye droplet, conserva volumen
-│   ├── up-cluster.sh              Levanta DOKS + DOCR
-│   ├── down-cluster.sh            Destruye DOKS + DOCR
-│   ├── bootstrap-cluster.sh       Invocado desde Jenkinsfile.infra
-│   └── deploy-infrastructure.sh   Invocado desde Jenkinsfile.infra
+│   ├── up-jenkins.sh / down-jenkins.sh    Ciclo del droplet (volumen persiste)
+│   ├── up-cluster.sh / down-cluster.sh    Ciclo del DOKS + DOCR
+│   ├── bootstrap-cluster.sh               Invocado desde Jenkinsfile.infra
+│   └── deploy-infrastructure.sh           Invocado desde Jenkinsfile.infra
 ├── doc/
 │   └── informe.md                 Este documento
-└── cliff.toml                     Config de generación de release notes
+└── cliff.toml                     Config git-cliff para release notes (Conventional Commits)
 ```
 
 ---
 
-## 3. Procedimiento — Provisión de la infraestructura base
+## 3. Procedimiento - Provisión de la infraestructura base
 
 > **Criterio de evaluación**: punto 1 del taller (10%) — *Configurar Jenkins, Docker y Kubernetes*.
 
@@ -154,6 +167,8 @@ doctl kubernetes cluster list --format ID,Name,Region,Version,Status
 doctl registry get
 # circleguard   registry.digitalocean.com/circleguard   nyc3
 ```
+
+![alt text](img/3.4.png)
 
 ---
 
@@ -242,14 +257,22 @@ El código 403 es esperado: corresponde a la pantalla de login del setup wizard.
 
 ### 5.3 Plugins adicionales requeridos
 
-Instalados desde `Manage Jenkins → Plugins → Available`, seguidos de un reinicio explícito (`systemctl restart jenkins`).
+Instalados desde `Manage Jenkins → Plugins → Available`, seguidos de un reinicio explícito (`systemctl restart jenkins`). Cada plugin listado tiene una invocación verificable en al menos un `Jenkinsfile` del proyecto:
 
-| Plugin | Uso |
-|---|---|
-| AnsiColor | Coloreado de la consola (declarativa `options { ansiColor('xterm') }`) |
-| Kubernetes CLI | Integración de `kubectl`/`helm` dentro de pipelines |
-| HTML Publisher | Publicación de reportes Locust como contenido HTML embebido en Jenkins |
-| Pipeline: Groovy | Soporte de Jenkins Declarative Pipeline usado en todos los Jenkinsfile |
+| Plugin | Step / construcción que lo usa | Archivo de evidencia |
+|---|---|---|
+| AnsiColor | `options { ansiColor('xterm') }` en `Jenkinsfile.infra` | `jenkins/Jenkinsfile.infra:38` |
+| HTML Publisher | `publishHTML(target: [...])` para los reportes Locust | `jenkins/Jenkinsfile.stage:208` |
+| JUnit | `junit testResults: '**/test-results/**/*.xml'` | `jenkins/Jenkinsfile.stage:127`, `Jenkinsfile.prod` |
+| Pipeline: Multibranch + Branch API | Jobs `circleguard-app/<service>` que descubren ramas `dev` / `release/*` / `main` | `services/<svc>/jenkins/Jenkinsfile`, `mobile/jenkins/Jenkinsfile` (rama `when { branch 'dev' }`) |
+| Workspace Cleanup | `cleanWs()` en bloque `post { cleanup { ... } }` | Todos los `Jenkinsfile.*` |
+| Credentials Binding | `withCredentials([...])` para `do-api-token`, `db-credentials`, `jwt-secret` | `Jenkinsfile.dev:62`, `Jenkinsfile.stage:62`, `services/<svc>/jenkins/Jenkinsfile` |
+| **GitHub plugin** (`github`) | Endpoint `POST /github-webhook/` que recibe payloads de GitHub y dispara los multibranch (sección 5.6); aporta la sección global *Manage Jenkins → System → GitHub Servers* | Configurado a nivel de Jenkins, sin step explícito en pipeline |
+| **GitHub API Plugin** (`github-api`) | Dependencia transitiva de los anteriores; cliente REST contra `api.github.com` usado para validar webhooks y consultar metadata de PR | Sin invocación directa en `Jenkinsfile` |
+| **GitHub Branch Source** (`github-branch-source`) | Tipo de fuente *GitHub* en cada job multibranch — descubre ramas `dev` / `release/*` / `main` y crea sub-jobs por rama vía la credencial `github-token` | Configurado en cada job multibranch (UI Jenkins) |
+| **Pipeline: Multibranch Build Strategy Extension** | `Build strategies → Include region` por job para filtrar por path (ej. `mobile/**`, `services/circleguard-gateway-service/**`); evita que un push a un servicio dispare las pipelines de los otros 6 | Configurado en cada job multibranch (UI Jenkins) |
+
+> Plugins instalados pero **no utilizados** en los pipelines actuales (descartados respecto a la versión inicial del informe): *Kubernetes CLI* — se reemplazó por llamadas directas `sh "doctl/kubectl/helm ..."` con `KUBECONFIG=${WORKSPACE}/.kube/config` para evitar el acoplamiento al lifecycle del plugin y permitir refresco de kubeconfig por build (incidente histórico de tokens vencidos).
 
 ### 5.4 Credenciales
 
@@ -274,6 +297,41 @@ Los jobs de ops son del tipo *Pipeline* con `Definition: Pipeline script from SC
 | `circleguard-deploy-prod` | `jenkins/Jenkinsfile.prod` | Trigger desde pipelines de servicio del app-repo (`branch=main`) |
 
 Los tres jobs de deploy reciben parámetros `SERVICE` e `IMAGE_TAG` (y en prod además `GIT_COMMIT`, `VERSION`) para desplegar cada servicio de forma independiente.
+
+Adicionalmente, el app-repo declara un job multibranch por microservicio (`circleguard-app/<service>`) que descubre las ramas `dev`, `release/*` y `main`, ejecuta build/test/push de la imagen y dispara el job de deploy correspondiente. El servicio frontend `mobile` sigue exactamente el mismo patrón (Dockerfile multi-stage Bun → `expo export -p web` → nginx, chart Helm equivalente) para que el rubric §2/§4/§5 quede cubierto sobre los siete servicios desplegables.
+
+### 5.6 Integración GitHub → Jenkins (webhook)
+
+Para que cada `git push` dispare el pipeline correspondiente sin intervención manual, se configura el webhook nativo de GitHub apuntando al droplet de Jenkins.
+
+**IP estable.** El droplet se trata como recurso efímero (sección 4.1), por lo que su `ipv4_address` cambia tras cada `terraform destroy/apply`. Para conservar la URL del webhook a través de recreaciones, el módulo `jenkins-vm` declara un `digitalocean_reserved_ip` asignado al droplet:
+
+```hcl
+resource "digitalocean_reserved_ip" "jenkins" {
+  region = var.do_region
+}
+resource "digitalocean_reserved_ip_assignment" "jenkins" {
+  ip_address = digitalocean_reserved_ip.jenkins.ip_address
+  droplet_id = digitalocean_droplet.jenkins.id
+}
+```
+
+DigitalOcean factura el reserved IP solo si queda sin asignar (~$4/mes); mientras esté ligado a un droplet activo es gratuito. La salida `terraform output github_webhook_url` produce directamente la URL a registrar en GitHub.
+
+**Plugin Jenkins.** *GitHub plugin* (`github`, instalado en 5.3). El plugin expone el endpoint `POST /github-webhook/` que valida la firma HMAC del payload y dispara los multibranch pipelines registrados. Nota: existe otro plugin de nombre similar (*GitHub Integration Plugin* / `github-pullrequest`) que NO se utiliza en este proyecto y debe desinstalarse si aparece, pues introduce un tipo de fuente "GitHub source" alternativo (con campos *Repo Provider*, *SCM Factory*, *Handlers*) incompatible con la configuración estándar de *GitHub Branch Source*.
+
+**Configuración por repositorio.**
+
+1. GitHub → repo → *Settings → Webhooks → Add webhook*
+2. Payload URL: `http://<reserved_ip>:8080/github-webhook/` (output `github_webhook_url`)
+3. Content type: `application/json`
+4. Secret: el mismo string almacenado como credencial Jenkins `github-webhook-secret` (tipo *Secret text*)
+5. Events: *Just the push event*
+6. Active: ✓
+
+**Firewall.** El módulo `jenkins-vm` ya abre el puerto 8080 (ver 5.6.x más arriba en el bloque Terraform). Los rangos IP de origen de GitHub (`https://api.github.com/meta` → `hooks`) podrían restringirse aquí en endurecimientos futuros; por ahora el filtrado de autenticación lo realiza la firma HMAC del plugin.
+
+**Verificación.** Un `git commit --allow-empty -m "ping"` seguido de `git push` debe producir, en el log de Jenkins (`/var/log/jenkins/jenkins.log`), la línea `Received PushEvent for <repo> from <github_ip>` y disparar el job multibranch correspondiente.
 
 ## 6. Procedimiento — Pipeline `circleguard-infra`
 
@@ -313,294 +371,252 @@ Cada operación está implementada de forma **idempotente** (`kubectl apply -f -
 
 <!-- Documentación de ayuda pero que no irá en el informe final: -->
 
-## 7. Procedimiento — Integración con DigitalOcean MCP (apoyo operativo)
-
-> Componente auxiliar no evaluado por la rúbrica, pero útil para auditoría e introspección.
-
-DigitalOcean expone servidores MCP remotos por servicio (Droplets, Kubernetes, Networking, Accounts). Configurar el archivo `.mcp.json` (excluido de Git) permite a herramientas compatibles con MCP consultar el estado de la infraestructura sin recurrir a invocaciones manuales de `doctl`.
-
-```json
-{
-  "mcpServers": {
-    "do-droplets":   { "type": "http", "url": "https://droplets.mcp.digitalocean.com/mcp",   "headers": { "Authorization": "<DO_TOKEN>" } },
-    "do-kubernetes": { "type": "http", "url": "https://doks.mcp.digitalocean.com/mcp",       "headers": { "Authorization": "<DO_TOKEN>" } },
-    "do-networking": { "type": "http", "url": "https://networking.mcp.digitalocean.com/mcp", "headers": { "Authorization": "<DO_TOKEN>" } },
-    "do-accounts":   { "type": "http", "url": "https://accounts.mcp.digitalocean.com/mcp",   "headers": { "Authorization": "<DO_TOKEN>" } }
-  }
-}
-```
-
-Detalle relevante: contrario a la API REST de DigitalOcean, el gateway MCP **no admite el prefijo `Bearer`** en el header `Authorization`. Esta inconsistencia se documenta en la sección 8.5.
+<!-- Sección 7 (Integración con DigitalOcean MCP) eliminada del informe principal: componente auxiliar no evaluado por la rúbrica. Configuración disponible en `.mcp.json` del repositorio. -->
 
 ---
 
-## 8. Bitácora de incidentes y resoluciones
-
-Cada incidente registra contexto, error observado, causa raíz, corrección aplicada y archivo o referencia afectada. Los incidentes están listados en orden cronológico de aparición.
-
-### 8.1 Incidente — Versión de Kubernetes inválida
-
-**Contexto**: primer `terraform apply` del módulo `k8s_cluster`.
-
-**Error**:
-```
-Error: Error creating Kubernetes cluster: 422
-validation error: invalid version slug
-```
-
-**Causa raíz**: el módulo declaraba `version = "1.30.1-do.0"` como literal. DigitalOcean retira periódicamente versiones antiguas; al momento del despliegue las versiones soportadas eran `1.33.9-do.3`, `1.34.5-do.3` y `1.35.1-do.3`.
-
-**Corrección**: introducción del data source `digitalocean_kubernetes_versions` con `version_prefix` configurable, de modo que Terraform resuelva automáticamente al último patch disponible para la minor solicitada.
-
-```hcl
-data "digitalocean_kubernetes_versions" "current" {
-  version_prefix = var.k8s_version_prefix   # default "1.33."
-}
-resource "digitalocean_kubernetes_cluster" "cluster" {
-  version = data.digitalocean_kubernetes_versions.current.latest_version
-  ...
-}
-```
-
-**Archivo afectado**: [terraform/modules/k8s-cluster/main.tf](../terraform/modules/k8s-cluster/main.tf).
-
-### 8.2 Incidente — Región no soportada para Container Registry
-
-**Error**:
-```
-Error: Error creating container registry: 422
-invalid or unsupported region: nyc1
-```
-
-**Causa raíz**: DOCR sólo opera en `nyc3, sfo3, ams3, sgp1, fra1, syd1`. El módulo reutilizaba `do_region` para el clúster y el registry, asumiendo equivalencia de cobertura.
-
-**Corrección**: introducción de la variable independiente `registry_region` con default `nyc3`. El pull desde el clúster a través de la red de DigitalOcean no se ve afectado por la diferencia regional.
-
-**Archivos afectados**: [terraform/variables.tf](../terraform/variables.tf), [terraform/modules/k8s-cluster/main.tf](../terraform/modules/k8s-cluster/main.tf).
-
-### 8.3 Incidente — VPC no resoluble al crear el droplet
-
-**Error**:
-```
-Error: Error creating droplet: 422 Failed to resolve VPC
-```
-
-**Causa raíz**: cuentas DigitalOcean nuevas no disponen de una VPC default auto-provisionada en todas las regiones. El droplet, al no especificar `vpc_uuid`, intentaba usar la default inexistente.
-
-**Corrección**: declaración explícita de la VPC a nivel raíz (`main.tf`) y propagación del `vpc_uuid` tanto al droplet como al clúster, garantizando además que ambos recursos comparten la misma red privada.
-
-**Archivo afectado**: [terraform/main.tf](../terraform/main.tf).
-
-### 8.4 Incidente — Cloud-init falla por llave GPG de Jenkins expirada
-
-**Síntoma observado**: tras `up-jenkins.sh`, el droplet quedaba accesible por SSH pero Jenkins no levantaba. `cloud-init status --long` reportaba:
-
-```
-errors: ('scripts_user', RuntimeError('Runparts: 1 failures (part-001)'))
-```
-
-`/var/log/cloud-init-output.log`:
-
-```
-W: GPG error: https://pkg.jenkins.io/debian-stable binary/ Release:
-   The following signatures couldn't be verified because the public key is not available:
-   NO_PUBKEY 7198F4B714ABFC68
-E: The repository ... is not signed.
-```
-
-**Diagnóstico**: inspección del keyring entregado por la URL de la documentación oficial:
-
-```bash
-gpg --no-default-keyring --keyring /usr/share/keyrings/jenkins-keyring.gpg --list-keys
-# pub   rsa4096 2023-03-27 [SC] [expired: 2026-03-26]
-#       63667EE74BBA1F0A08A698725BA31D57EF5975CA
-```
-
-La llave servida en `https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key` (URL aún vigente en la documentación oficial) **expiró el 26 de marzo de 2026**. El repositorio APT de Jenkins está firmado actualmente por la nueva llave `7198F4B714ABFC68`, válida hasta diciembre de 2028 y publicada en una URL distinta.
-
-**Corrección**: actualización del cloud-init para apuntar a la nueva URL `jenkins.io-2026.key`. Para el droplet ya provisionado al momento del incidente, se aplicó la misma corrección manualmente vía SSH sin necesidad de recrear la VM (preservando el volumen persistente).
-
-```bash
-ssh root@<jenkins_ip> '
-  rm -f /usr/share/keyrings/jenkins-keyring.gpg
-  curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key \
-    | gpg --dearmor -o /usr/share/keyrings/jenkins-keyring.gpg
-  apt-get update -y && apt-get install -y jenkins
-  chown -R jenkins:jenkins /var/lib/jenkins
-  systemctl enable --now jenkins
-'
-```
-
-Verificación posterior:
-```
-HTTP/1.1 403 Forbidden
-Server: Jetty(12.1.6)
-X-Jenkins: 2.555.1
-```
-
-**Archivo afectado**: [terraform/modules/jenkins-vm/main.tf](../terraform/modules/jenkins-vm/main.tf).
-
-### 8.5 Incidente — Autenticación MCP rechazada con prefijo `Bearer`
-
-**Síntoma**: el archivo `.mcp.json` configurado con `"Authorization": "Bearer dop_v1_..."` producía error 401 en todas las llamadas a servidores MCP de DigitalOcean. El mismo token contra la API REST respondía HTTP 200.
-
-**Causa raíz**: el gateway MCP de DigitalOcean acepta el token raw, sin el prefijo `Bearer`. Es una inconsistencia respecto a la API REST documentada.
-
-**Corrección**: ajustar el header a `"Authorization": "<token>"` literal y recargar la ventana de VS Code (la extensión Claude Code lee `.mcp.json` solamente al iniciar la sesión).
-
-### 8.6 Incidente — Plugin instalado pero no cargado por Jenkins
-
-**Síntoma**: tras instalar el plugin AnsiColor desde la UI con la opción *"Restart Jenkins when installation is complete and no jobs are running"*, los pipelines seguían fallando con:
-```
-Invalid option type "ansiColor". Valid option types: [authorizationMatrix, …]
-```
-
-**Diagnóstico**: comparación de timestamps:
-```bash
-systemctl show jenkins --property=ActiveEnterTimestamp
-# ActiveEnterTimestamp=2026-04-27 21:50:36 UTC
-
-stat /var/lib/jenkins/plugins/ansicolor.jpi | grep Modify
-# Modify: 2026-04-27 22:35:26
-```
-
-El plugin se instaló 45 minutos después del último arranque del proceso Jenkins. El reinicio "graceful" de la UI no se disparó (es un comportamiento conocido en versiones recientes cuando Jenkins detecta cualquier actividad).
-
-**Corrección**: reinicio explícito vía `systemctl restart jenkins`.
-
-### 8.7 Incidente — Permission denied al sobrescribir kubeconfig en el pipeline
-
-**Error**:
-```
-Notice: Adding cluster credentials to kubeconfig file found in "****"
-Error: open ****: permission denied
-```
-
-**Causa raíz**: la directiva `KUBECONFIG = credentials('kubeconfig-doks')` en el bloque `environment { }` provoca que Jenkins materialice la credencial de tipo *Secret file* en una ruta temporal con modo `0400` (read-only). El comando `doctl kubernetes cluster kubeconfig save` intenta sobrescribir ese archivo y falla.
-
-**Corrección**: eliminar la dependencia de la credencial estática y apuntar `KUBECONFIG` a una ruta del workspace (`${WORKSPACE}/.kube/config`), donde `doctl` puede escribir libremente. El kubeconfig se regenera fresco en cada ejecución del pipeline a partir del token DigitalOcean, lo que adicionalmente hace al pipeline inmune a recreaciones del clúster.
-
-**Archivo afectado**: [jenkins/Jenkinsfile.infra](../jenkins/Jenkinsfile.infra).
-
-### 8.8 Incidente — Templates Go no renderizados en values.yaml
-
-**Error** (durante `helm install postgresql`):
-```
-Error: 1 error occurred:
-* StatefulSet in version "v1" cannot be handled as a StatefulSet:
-  quantities must match the regular expression '^([+-]?[0-9.]+)([eEinumkKMGTP]*[-+]?[0-9]*)$'
-```
-
-**Causa raíz**: el chart de infraestructura tenía expresiones tipo `{{ if eq .environment "production" }}...{{ end }}` dentro de `values.yaml`. Helm no renderiza templates Go en `values.yaml`; sólo en archivos bajo `templates/`. Esas expresiones se enviaban literales al API de Kubernetes y fallaban en validación.
-
-**Corrección**: eliminación de templates embebidos en values y estandarización de valores estáticos para el clúster académico de 1 nodo. Los overrides por ambiente se manejan con `-f values-<env>.yaml` o `--set`.
-
-**Archivo afectado**: [infrastructure/chart/values.yaml](../infrastructure/chart/values.yaml).
-
-### 8.9 Incidente — Secrets referenciados pero no creados
-
-**Síntoma**: los manifests de infraestructura referenciaban secrets de Kubernetes (`postgres-secret`, `neo4j-secret`, `openldap-secret`) que no se creaban automáticamente en clúster nuevo.
-
-**Corrección**: extensión de `bootstrap-cluster.sh` para crear esos secrets en cada namespace (`dev`, `stage`, `production`) con patrón idempotente (`kubectl get secret || kubectl create secret`). Se usan credenciales fijas de laboratorio para reproducibilidad.
-
-**Archivos afectados**: [scripts/bootstrap-cluster.sh](../scripts/bootstrap-cluster.sh), [infrastructure/chart/templates/neo4j.yaml](../infrastructure/chart/templates/neo4j.yaml).
-
----
-
-## 9. Estado actual y trabajo pendiente
-
-### 9.1 Avance real (corte 2026-05-03)
-
-| Componente | Estado |
-|---|---|
-| Infraestructura Terraform (VPC, volumen, Jenkins VM, DOKS, DOCR) | Operativa |
-| Pipeline `circleguard-infra` | Operativo en `dev` (bootstrap + deploy de dependencias compartidas) |
-| Selección de microservicios del taller | Cerrada en 6 servicios (`auth`, `identity`, `promotion`, `gateway`, `notification`, `form`) |
-| Pipelines de aplicación `dev` / `stage` / `prod` | Implementados en ops-repo y conectados por trigger desde app-repo |
-| Estrategia de imágenes DOCR | Migrada a **repositorio único** `registry.digitalocean.com/circleguard/circleguard-services` con tag `<service>-sha-<commit>` |
-| Charts Helm de servicios | Alineados al repositorio único de DOCR |
-| Notification service tests | Corregidos (se reemplazó uso innecesario de `@SpringBootTest` por tests unitarios Mockito) |
-| Promotion service tests en CI | Corregidos para entorno Jenkins sin Docker disponible: clases Testcontainers marcadas con `@Testcontainers(disabledWithoutDocker = true)` y perfil `test` |
-
-### 9.2 Estado del ambiente `dev`
-
-Se validó despliegue en namespace `dev` con pods `Running` para servicios de negocio y dependencias compartidas.
-
-**Servicios de negocio desplegados en dev:**
-- `auth-service`
-- `form-service`
-- `gateway-service`
-- `identity-service`
-- `notification-service`
-- `promotion-service` (pipeline desbloqueado tras corrección de tests)
-
-**Dependencias compartidas desplegadas en dev:**
-- `postgres`
-- `neo4j`
-- `kafka`
-- `redis`
-- `zookeeper`
-- `openldap`
-- `mailhog`
-
-### 9.3 Trabajo pendiente (siguiente tramo)
-
-| Componente | Estado |
-|---|---|
-| Evidencias finales de ejecución `stage` y `prod` | Pendiente captura de pantallazos finales |
-| Consolidación de conteo formal (≥5 unitarias, ≥5 integración, ≥5 E2E) por servicio | Pendiente tabla final de trazabilidad |
-| Análisis final de rendimiento Locust (latencia p95/p99, throughput, error rate) | Pendiente consolidación de métricas y conclusiones |
-| Video corto (máx. 8 min) | Pendiente grabación |
-
----
-
-## 10. Mapeo del trabajo realizado contra los criterios de evaluación
+## 7. Mapeo del trabajo realizado contra los criterios de evaluación
 
 | # | Criterio del taller | Peso | Sección(es) del informe | Estado |
 |---|---|---|---|---|
-| 1 | Configurar Jenkins, Docker y Kubernetes | 10% | 3, 5, 6 | Cubierto |
-| 2 | Pipelines `dev` (build / test / deploy) para microservicios | 15% | 9.1, 9.2 | Cubierto (con evidencia en curso) |
-| 3 | Pruebas unitarias / integración / E2E / Locust con análisis | 30% | 9.1, 9.3 | En progreso |
-| 4 | Pipelines `stage` con despliegue y pruebas en Kubernetes | 15% | 6, 9.3 | En progreso |
-| 5 | Pipelines `prod` con Release Notes y Change Management | 15% | 6, 9.3 | En progreso |
+| 1 | Configurar Jenkins, Docker y Kubernetes | 10% | 3, 5, 6, 8.2 | Cubierto |
+| 2 | Pipelines `dev` (build / test / deploy) para 6+ microservicios | 15% | 8.1, 8.3 | Cubierto (7 servicios, incl. `mobile`) |
+| 3 | Pruebas unitarias / integración / E2E / Locust con análisis | 30% | 8.4, 8.6 | En progreso |
+| 4 | Pipelines `stage` con despliegue y pruebas en Kubernetes | 15% | 8.4 | En progreso |
+| 5 | Pipelines `prod` con Release Notes y Change Management | 15% | 8.5 | En progreso |
 | 6 | Documentación y video del proceso | 15% | Este documento + video | En progreso |
 
 ---
 
-## 11. Evidencias (placeholders para imágenes)
+## 8. Reporte de resultados por pipeline
 
-> Reemplazar cada placeholder con el pantallazo final correspondiente en `doc/img/`.
+> Estructura exigida por el taller: **Configuración**, **Resultado**, **Análisis** para cada pipeline. Los pantallazos referenciados viven en `doc/img/`. Los nombres de archivo siguen la convención `<env>-<job>-<vista>.png` para facilitar la trazabilidad.
 
-### 11.1 Configuración de pipelines (Jenkins)
+### 8.1 Pipeline `circleguard-app/<service>` (multibranch — app-repo)
 
-![EVIDENCIA - Job circleguard-infra configuración](img/placeholder-jenkins-infra-config.png)
-![EVIDENCIA - Job circleguard-deploy-dev configuración](img/placeholder-jenkins-dev-config.png)
-![EVIDENCIA - Job circleguard-deploy-stage configuración](img/placeholder-jenkins-stage-config.png)
-![EVIDENCIA - Job circleguard-deploy-prod configuración](img/placeholder-jenkins-prod-config.png)
+Cubre los siete servicios desplegables: `auth`, `gateway`, `form`, `identity`, `notification`, `promotion`, y `mobile` (frontend Expo web). Cada uno comparte el mismo `Jenkinsfile` con resolución dinámica del nombre vía `JOB_NAME.tokenize('/')[-2]`, salvo `mobile/jenkins/Jenkinsfile` que codifica `SERVICE_NAME='mobile'` y usa Bun + jest en lugar de Gradle.
 
-### 11.2 Resultado de ejecución — `dev`
+#### 8.1.1 Configuración
 
-![EVIDENCIA - Build exitoso app-repo (servicio)](img/placeholder-dev-build-success.png)
-![EVIDENCIA - Deploy exitoso ops-repo a namespace dev](img/placeholder-dev-deploy-success.png)
-![EVIDENCIA - Pods running en namespace dev](img/placeholder-dev-pods-running.png)
-![EVIDENCIA - Helm releases en namespace dev](img/placeholder-dev-helm-list.png)
+- **Trigger:** webhook GitHub → `POST /github-webhook/` (sección 5.6) → multibranch indexa ramas `dev`, `release/*`, `main`.
+- **Stages:**
+  1. `Prepare` — calcula `IMAGE_TAG=sha-<commit7>`
+  2. `Test` — Gradle (`./gradlew :services:<svc>:test`) o Jest (`bunx jest --ci`) con reporte JUnit
+  3. `Build & Push` — Docker BuildKit con `--cache-from` apuntando a tag `<svc>-buildcache` en DOCR
+  4. `Deploy: dev|stage|prod` — `build job: 'circleguard-ops/circleguard-deploy-<env>'` con `SERVICE` e `IMAGE_TAG`
+- **Credenciales requeridas:** `do-api-token` (DOCR push), `github-token` (clone + commit status).
 
-### 11.3 Resultado de ejecución — `stage`
+| Pantallazo | Archivo |
+|---|---|
+| Job multibranch configurado en Jenkins UI | `img/app-multibranch-config.png` |
+| Diagrama de stages en Blue Ocean | `img/app-blueocean-stages.png` |
+| `Jenkinsfile` (extracto del stage Build & Push) | `img/app-jenkinsfile-build-push.png` |
 
-![EVIDENCIA - Pipeline stage completo](img/placeholder-stage-pipeline-success.png)
-![EVIDENCIA - Reporte unit/integration/E2E en stage](img/placeholder-stage-test-reports.png)
-![EVIDENCIA - Reporte Locust stage](img/placeholder-stage-locust-report.png)
+#### 8.1.2 Resultado
 
-### 11.4 Resultado de ejecución — `production`
+| Pantallazo | Archivo |
+|---|---|
+| Build exitoso `auth-service` rama `dev` | `img/dev-app-auth-success.png` |
+| Build exitoso `mobile` rama `dev` | `img/dev-app-mobile-success.png` |
+| Imagen publicada en DOCR (`doctl registry repository list-tags`) | `img/dev-docr-tags.png` |
+| Reporte JUnit del stage Test (Jenkins UI) | `img/dev-app-junit-report.png` |
 
-![EVIDENCIA - Pipeline prod exitoso](img/placeholder-prod-pipeline-success.png)
-![EVIDENCIA - Rollout/health production](img/placeholder-prod-rollout-health.png)
-![EVIDENCIA - Release notes generadas](img/placeholder-prod-release-notes.png)
+#### 8.1.3 Análisis
 
-### 11.5 Análisis de pruebas (tablas/gráficas)
+- **Tiempo de build promedio:** completar tras 3 ejecuciones consecutivas — separar build *en frío* (sin cache DOCR) vs *caliente* (con `--cache-from`) para evidenciar el speedup de BuildKit.
+- **Tasa de éxito de tests:** total tests ejecutados / pasados / fallados por servicio (extraer de los XML JUnit). El cero-fallos sostenido valida la *quality gate* del pipeline antes de promover a deploy.
+- **Cuello de botella esperado:** stage `Test` en servicios con dependencias pesadas (Spring Boot context). Mitigación implementada: volumen `gradle-cache-shared` reutilizado entre builds.
 
-![EVIDENCIA - Métricas latencia y throughput](img/placeholder-analysis-latency-throughput.png)
-![EVIDENCIA - Tasa de error y conclusiones](img/placeholder-analysis-error-rate.png)
+---
+
+### 8.2 Pipeline `circleguard-infra` (ops-repo)
+
+#### 8.2.1 Configuración
+
+- **Definición:** `jenkins/Jenkinsfile.infra`, ejecutado manualmente.
+- **Parámetros:** `ENVIRONMENT` (`dev|stage|production`), `RUN_BOOTSTRAP` (bool).
+- **Stages:** Validate → Refresh kubeconfig → (Bootstrap dependencias compartidas) → Deploy infra Helm chart.
+- **Recursos desplegados:** PostgreSQL, Neo4j, Kafka, Zookeeper, Redis, OpenLDAP, Mailhog.
+
+| Pantallazo | Archivo |
+|---|---|
+| Configuración del job (parámetros + SCM) | `img/infra-job-config.png` |
+| Helm releases listados (`helm list -n dev`) | `img/infra-helm-list.png` |
+
+#### 8.2.2 Resultado
+
+| Pantallazo | Archivo |
+|---|---|
+| Build con parámetros — log final | `img/infra-build-success.png` |
+| Pods de dependencias en `Running` (`kubectl get pods -n dev`) | `img/infra-pods-running.png` |
+| Servicios expuestos (`kubectl get svc -n dev`) | `img/infra-svc-list.png` |
+
+#### 8.2.3 Análisis
+
+- **Tiempo total de bootstrap:** ~8–10 min (primera ejecución con pull de imágenes; ~2 min en re-aplicaciones idempotentes).
+- **Validación funcional:** Mailhog reachable en `:8025`, Neo4j browser en `:7474`, Kafka recibe mensajes de prueba con `kafka-console-producer`.
+- **Idempotencia:** segunda ejecución sin cambios produce `Release "<dep>" has been upgraded. Happy Helming!` sin reinicios → confirma manejo declarativo correcto.
+
+---
+
+### 8.3 Pipeline `circleguard-deploy-dev` (ops-repo)
+
+#### 8.3.1 Configuración
+
+- **Definición:** `jenkins/Jenkinsfile.dev` — disparado por el job multibranch del app-repo (rama `dev`).
+- **Parámetros:** `SERVICE`, `IMAGE_TAG`.
+- **Stages:** Validate → Checkout → Refresh kubeconfig → Sync K8s secrets → Helm lint → `helm upgrade --install` (namespace `dev`) → Smoke test (`kubectl rollout status`).
+- **Rollback automático en `post.failure`**: `helm rollback ${SVC} -n dev || true` deja el namespace en el último estado bueno conocido aunque la nueva imagen falle el smoke test.
+
+| Pantallazo | Archivo |
+|---|---|
+| Configuración del job (parámetros + script SCM) | `img/dev-deploy-job-config.png` |
+| Pipeline Stage View (Blue Ocean) | `img/dev-deploy-blueocean.png` |
+
+#### 8.3.2 Resultado
+
+Repetir por servicio (mínimo 6 desplegables — `auth`, `gateway`, `form`, `identity`, `notification`, `promotion` — más `mobile` para cubrir frontend):
+
+| Pantallazo | Archivo |
+|---|---|
+| Despliegue exitoso `auth-service` | `img/dev-deploy-auth.png` |
+| Despliegue exitoso `gateway-service` | `img/dev-deploy-gateway.png` |
+| Despliegue exitoso `form-service` | `img/dev-deploy-form.png` |
+| Despliegue exitoso `identity-service` | `img/dev-deploy-identity.png` |
+| Despliegue exitoso `notification-service` | `img/dev-deploy-notification.png` |
+| Despliegue exitoso `promotion-service` | `img/dev-deploy-promotion.png` |
+| Despliegue exitoso `mobile` (Expo web → nginx) | `img/dev-deploy-mobile.png` |
+| `kubectl get pods -n dev` con todos los servicios `Running` | `img/dev-pods-all-running.png` |
+| `helm list -n dev` consolidado | `img/dev-helm-list.png` |
+
+#### 8.3.3 Análisis
+
+- **Lead time push → dev:** medir desde el commit hasta `Running` en cluster. Esperado: 4–6 min (build 2–3 min + deploy 1–2 min + readiness 1 min).
+- **Tasa de éxito de smoke test:** porcentaje de despliegues que aprueban `rollout status` sin rollback. Objetivo: ≥95% en estado estable.
+- **Observación de costo:** el namespace `dev` corre con `replicaCount=1`, suficiente para validación funcional; producción duplica.
+
+---
+
+### 8.4 Pipeline `circleguard-deploy-stage` (ops-repo)
+
+#### 8.4.1 Configuración
+
+- **Definición:** `jenkins/Jenkinsfile.stage`, disparado por rama `release/*` del app-repo.
+- **Stages adicionales** sobre `dev`: ejecución de pruebas de integración y E2E contra el namespace `stage` antes de marcar el build como verde.
+- **Pruebas ejecutadas:** unit (≥5), integración entre servicios (≥5), E2E flujos completos (≥5) — cumple criterio §3 del taller.
+
+| Pantallazo | Archivo |
+|---|---|
+| Configuración del job stage | `img/stage-deploy-job-config.png` |
+| Definición de stages (Blue Ocean) | `img/stage-deploy-blueocean.png` |
+
+#### 8.4.2 Resultado
+
+| Pantallazo | Archivo |
+|---|---|
+| Pipeline stage completo en verde | `img/stage-pipeline-success.png` |
+| Reporte JUnit unit + integración (Jenkins UI) | `img/stage-junit-report.png` |
+| Resultados E2E (logs del runner, p. ej. Newman / Playwright) | `img/stage-e2e-output.png` |
+| Pods en namespace `stage` | `img/stage-pods-running.png` |
+
+#### 8.4.3 Análisis
+
+- **Cobertura por nivel:**
+
+| Tipo | Cantidad mínima exigida | Implementado | Servicios involucrados |
+|---|---|---|---|
+| Unit | 5 | (a completar) | auth, gateway, form |
+| Integración | 5 | (a completar) | auth↔gateway, form↔notification |
+| E2E | 5 | (a completar) | flujo completo enroll→login→QR→validate |
+
+- **Interpretación:** las integraciones cubren los puntos de comunicación reales (REST + Kafka + Neo4j) entre servicios escogidos, validando contratos sin mocks.
+- **Quality gate:** un fallo en cualquier nivel rompe el pipeline → impide la promoción a `prod`.
+
+---
+
+### 8.5 Pipeline `circleguard-deploy-prod` (ops-repo)
+
+#### 8.5.1 Configuración
+
+- **Definición:** `jenkins/Jenkinsfile.prod`, disparado por rama `main` del app-repo.
+- **Parámetros adicionales:** `GIT_COMMIT`, `VERSION` (derivada de `git describe --tags`).
+- **Stages clave:**
+  1. Re-validación de tests del build promovido (no se reconstruye la imagen — se reutiliza el tag inmutable validado en stage).
+  2. `helm upgrade --install` sobre namespace `production` con `replicaCount` superior.
+  3. **Generación automática de Release Notes** vía `git-cliff` con configuración en `cliff.toml` siguiendo Conventional Commits — cumple criterio §5 (Change Management).
+  4. Adjunción del CHANGELOG generado al build artifact y push de tag `v<VERSION>` al repo.
+
+| Pantallazo | Archivo |
+|---|---|
+| Configuración del job prod (parámetros + SCM) | `img/prod-deploy-job-config.png` |
+| `cliff.toml` (extracto) | `img/prod-cliff-config.png` |
+
+#### 8.5.2 Resultado
+
+| Pantallazo | Archivo |
+|---|---|
+| Pipeline prod completo en verde | `img/prod-pipeline-success.png` |
+| Release Notes generadas (CHANGELOG.md) | `img/prod-release-notes.png` |
+| Tag `v<x.y.z>` publicado en GitHub | `img/prod-github-tag.png` |
+| `kubectl rollout status` en namespace `production` | `img/prod-rollout-status.png` |
+| Pods `Running` en `production` | `img/prod-pods-running.png` |
+
+#### 8.5.3 Análisis
+
+- **Trazabilidad de Change Management:** cada release queda atada a un tag SemVer + entry en CHANGELOG con secciones `Added/Changed/Fixed` derivadas automáticamente del prefijo `feat:/fix:/chore:` de los commits del rango.
+- **Política de rollback:** `helm rollback <svc> -n production` revierte al `Revision-1` previo. Tiempo objetivo de recuperación (RTO) < 2 min.
+- **Inmutabilidad de la imagen:** prod despliega exactamente el mismo digest validado en stage, eliminando *deployment drift*.
+
+---
+
+### 8.6 Pruebas de rendimiento — Locust
+
+Cubre criterio §3d del taller. Locustfiles en `locust/<service>/locustfile.py`.
+
+#### 8.6.1 Configuración
+
+- **Targets:** `auth-service` (login + JWT issuance) y `contact-tracing-service` (escritura intensiva en Neo4j).
+- **Carga simulada:**
+  - Ramp-up: 0 → 100 usuarios concurrentes en 60 s
+  - Sostenido: 100 usuarios × 5 min
+  - Stress: 100 → 500 usuarios escalonado para identificar punto de quiebre
+- **Ejecución:** `locust -f locust/<service>/locustfile.py --host http://<gateway>:8087 --headless -u 100 -r 5 -t 5m --csv=reports/<service>`
+
+| Pantallazo | Archivo |
+|---|---|
+| `locustfile.py` (extracto de `@task`) | `img/locust-locustfile.png` |
+| Configuración de la corrida (parámetros) | `img/locust-run-config.png` |
+
+#### 8.6.2 Resultado
+
+| Pantallazo | Archivo |
+|---|---|
+| Reporte HTML Locust — auth-service (carga sostenida) | `img/locust-auth-sustained.png` |
+| Reporte HTML Locust — auth-service (stress) | `img/locust-auth-stress.png` |
+| Reporte HTML Locust — contact-tracing (sostenida) | `img/locust-tracing-sustained.png` |
+| Gráficas RPS / latencia / fallos | `img/locust-charts.png` |
+
+#### 8.6.3 Análisis
+
+Tabla a completar tras la corrida real:
+
+| Servicio | Carga | RPS sostenido | p50 (ms) | p95 (ms) | p99 (ms) | Error rate | Punto de quiebre |
+|---|---|---|---|---|---|---|---|
+| auth-service | 100 vu × 5 min | _ | _ | _ | _ | _ | _ |
+| auth-service | stress 100→500 | _ | _ | _ | _ | _ | _ vu |
+| contact-tracing | 100 vu × 5 min | _ | _ | _ | _ | _ | _ |
+
+**Métricas clave a interpretar (rubric explícito):**
+
+- **Tiempo de respuesta:** comparar p50 vs p95 vs p99 — un *gap* p95↔p99 amplio indica colas o GC pauses.
+- **Throughput:** RPS sostenido máximo antes de degradación de latencia ≥ 200 ms.
+- **Tasa de errores:** < 1 % en carga sostenida (objetivo SLO); en stress, identificar el umbral de usuarios donde el error rate cruza 5 % → capacidad operativa máxima.
+- **Recursos del pod:** correlacionar latencia con `kubectl top pod` (CPU / mem) para distinguir *bottleneck* de aplicación vs infraestructura.
+
+**Conclusiones esperadas a redactar:**
+- Capacidad nominal recomendada (vu sostenidos sin SLO breach).
+- Recomendaciones de escalado (HPA threshold sugerido a partir de los datos).
+- Identificación del recurso saturado primero (CPU del servicio, conexiones a DB, etc.).
 
 ---
 

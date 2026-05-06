@@ -49,6 +49,7 @@ env:
   DB_HOST: "postgres"
   DB_NAME: "circleguard_auth"
   LDAP_HOST: "openldap"
+  IDENTITY_SERVICE_URL: "http://identity-service:8082"
 
 envFrom:
   - secretRef:

@@ -369,12 +369,6 @@ Cada operación está implementada de forma **idempotente** (`kubectl apply -f -
 
 ---
 
-<!-- Documentación de ayuda pero que no irá en el informe final: -->
-
-<!-- Sección 7 (Integración con DigitalOcean MCP) eliminada del informe principal: componente auxiliar no evaluado por la rúbrica. Configuración disponible en `.mcp.json` del repositorio. -->
-
----
-
 ## 7. Mapeo del trabajo realizado contra los criterios de evaluación
 
 | # | Criterio del taller | Peso | Sección(es) del informe | Estado |

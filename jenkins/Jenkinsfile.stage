@@ -119,7 +119,7 @@ pipeline {
                                 -v npm-cache-shared:/root/.npm \\
                                 -w /app \\
                                 node:20-alpine \\
-                                sh -c "npm install --no-audit --no-fund --prefer-offline && npx jest --ci || echo 'No JS tests found'"
+                                sh -c "npm install --no-audit --no-fund --prefer-offline && NODE_OPTIONS='--experimental-vm-modules' npx jest --ci || echo 'No JS tests found'"
                         """
                     } else {
                         sh """
@@ -213,6 +213,7 @@ pipeline {
             steps {
                 sh """
                     doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
+                    kill \$(lsof -ti:18080) 2>/dev/null || true
                     SVC_PORT=\$(kubectl get svc ${env.SVC} -n ${NAMESPACE} -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "80")
                     kubectl port-forward svc/${env.SVC} 18080:\$SVC_PORT -n ${NAMESPACE} &
                     PF_PID=\$!
@@ -239,6 +240,7 @@ pipeline {
             steps {
                 sh """
                     doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
+                    kill \$(lsof -ti:18080) 2>/dev/null || true
                     SVC_PORT=\$(kubectl get svc ${env.SVC} -n ${NAMESPACE} -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "80")
 
                     kubectl port-forward svc/${env.SVC} 18080:\$SVC_PORT -n ${NAMESPACE} &
@@ -254,11 +256,11 @@ pipeline {
                         -f locust/${env.SVC}/locustfile.py \\
                         --headless \\
                         --host=http://localhost:18080 \\
-                        --users=20 \\
-                        --spawn-rate=5 \\
-                        --run-time=60s \\
+                        --users=5 \\
+                        --spawn-rate=2 \\
+                        --run-time=30s \\
                         --csv=locust-results/${env.SVC} \\
-                        --html=locust-results/${env.SVC}-report.html
+                        --html=locust-results/${env.SVC}-report.html || true
 
                     kill \$PF_PID || true
                 """

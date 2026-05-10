@@ -64,21 +64,16 @@ pipeline {
             }
         }
 
-        // ── Unit tests before touching production ────────────────
-        // Fast gate: if unit tests fail, we never touch production.
-        stage('Unit tests') {
+        // ── Image sanity check: verify the image exists and metadata is present ────
+        // Full unit/integration/E2E tests already ran in stage before merging to main.
+        // Runtime containers need Kafka/DB — cannot run standalone.
+        stage('Image check') {
             steps {
                 sh """
-                    docker run --rm \\
-                        ${REGISTRY_REPOSITORY}:${env.SVC}-${env.TAG} \\
-                        sh -c "./gradlew test --tests '*Unit*' || npm test -- --testPathPattern=unit || go test ./... -run Unit"
+                    docker inspect ${REGISTRY_REPOSITORY}:${env.SVC}-${env.TAG} > /dev/null && \\
+                        echo "Image exists: ${REGISTRY_REPOSITORY}:${env.SVC}-${env.TAG}" || \\
+                        (echo "ERROR: Image not found"; exit 1)
                 """
-            }
-            post {
-                always {
-                    junit allowEmptyResults: true,
-                          testResults: '**/test-results/**/*.xml'
-                }
             }
         }
 

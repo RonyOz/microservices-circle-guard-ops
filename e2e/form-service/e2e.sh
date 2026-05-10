@@ -38,9 +38,9 @@ echo "=== E2E: form-service ==="
 
 check_any "Health endpoint"               GET  "/actuator/health"                "200 503"
 
-SURVEY_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/v1/surveys/" \
+SURVEY_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/v1/surveys" \
     -H 'Content-Type: application/json' \
-    -d '{"anonymousId":"e2e-test-456","hasSymptoms":false,"contactWithConfirmed":false,"vaccinated":true}' 2>/dev/null || echo "000")
+    -d '{"anonymousId":"550e8400-e29b-41d4-a716-446655440000","hasFever":false,"hasCough":false}' 2>/dev/null || echo "000")
 if [ "$SURVEY_RESPONSE" = "200" ] || [ "$SURVEY_RESPONSE" = "201" ]; then
     echo "  PASS  Submit health survey"
     PASS=$((PASS+1))

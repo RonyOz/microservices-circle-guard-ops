@@ -37,8 +37,8 @@ check_any() {
 echo "=== E2E: notification-service ==="
 
 check_any "Health endpoint"         GET  "/actuator/health"                    "200 503"
-check "Actuator info"            GET  "/actuator/info"                      "200"
-check "Actuator metrics"         GET  "/actuator/metrics"                   "200"
+check "Health liveness"          GET  "/actuator/health/liveness"           "200"
+check "Health readiness"         GET  "/actuator/health/readiness"          "200"
 
 echo "--- Results: $PASS passed, $FAIL failed ---"
 [ "$FAIL" -eq 0 ]

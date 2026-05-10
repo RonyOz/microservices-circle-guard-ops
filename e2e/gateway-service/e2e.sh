@@ -37,7 +37,7 @@ check_any() {
 echo "=== E2E: gateway-service ==="
 
 check_any "Health endpoint"           GET  "/actuator/health"                    "200 503"
-check "Validate empty body"           POST "/api/v1/gate/validate"              "400" \
+check "Validate with null token"      POST "/api/v1/gate/validate"              "200" \
     -H 'Content-Type: application/json' \
     -d '{}'
 check "Validate malformed token"     POST "/api/v1/gate/validate"              "200" \

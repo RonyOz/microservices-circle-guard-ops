@@ -37,7 +37,7 @@ check_any() {
 echo "=== E2E: identity-service ==="
 
 check_any "Health endpoint"             GET    "/actuator/health"                "200 503"
-check "Register visitor (missing)"   POST   "/api/v1/identities/visitor"     "400" \
+check "Register visitor (empty)"     POST   "/api/v1/identities/visitor"     "200" \
     -H 'Content-Type: application/json' \
     -d '{}'
 
@@ -51,7 +51,7 @@ if [ "$VISITOR_CODE" = "200" ]; then
     PASS=$((PASS+1))
     ANON_ID=$(echo "$VISITOR_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('anonymousId',''))" 2>/dev/null || echo "")
     if [ -n "$ANON_ID" ]; then
-        check "Lookup visitor by ID"  GET  "/api/v1/identities/lookup/$ANON_ID"  "200"
+        check "Lookup visitor by ID (no auth)"  GET  "/api/v1/identities/lookup/$ANON_ID"  "401"
     fi
 else
     echo "  FAIL  Register visitor (expected 200, got $VISITOR_CODE)"

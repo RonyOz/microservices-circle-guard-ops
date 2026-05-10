@@ -33,6 +33,7 @@ pipeline {
                     env.SVC = params.SERVICE.trim().replaceAll(/^circleguard-/, '')
                     env.TAG = params.IMAGE_TAG.trim()
                     env.SVC_DIR = env.SVC == 'mobile' ? 'mobile' : "circleguard-${env.SVC}"
+                    env.SVC_DB = env.SVC == 'mobile' ? 'mobile' : "circleguard_${env.SVC}".replaceAll('-', '_')
                     echo "Service: ${env.SVC} | Tag: ${env.TAG} | Env: ${NAMESPACE}"
                 }
             }
@@ -154,7 +155,7 @@ pipeline {
                         -v gradle-cache-shared:/root/.gradle \\
                         -w /workspace \\
                         -e SPRING_PROFILES_ACTIVE=stage \\
-                        -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgresql.${NAMESPACE}.svc.cluster.local:5432/circleguard_${env.SVC//-/_} \\
+                        -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgresql.${NAMESPACE}.svc.cluster.local:5432/${SVC_DB} \\
                         -e KAFKA_BOOTSTRAP_SERVERS=kafka.${NAMESPACE}.svc.cluster.local:9092 \\
                         -e SPRING_NEO4J_URI=bolt://neo4j.${NAMESPACE}.svc.cluster.local:7687 \\
                         -e SPRING_DATA_REDIS_HOST=redis.${NAMESPACE}.svc.cluster.local \\

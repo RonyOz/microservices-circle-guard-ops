@@ -70,9 +70,9 @@ pipeline {
         stage('Image check') {
             steps {
                 sh """
-                    docker inspect ${REGISTRY_REPOSITORY}:${env.SVC}-${env.TAG} > /dev/null && \\
+                    docker pull ${REGISTRY_REPOSITORY}:${env.SVC}-${env.TAG} > /dev/null 2>&1 && \\
                         echo "Image exists: ${REGISTRY_REPOSITORY}:${env.SVC}-${env.TAG}" || \\
-                        (echo "ERROR: Image not found"; exit 1)
+                        (echo "ERROR: Image not found in registry"; exit 1)
                 """
             }
         }
@@ -162,6 +162,13 @@ pipeline {
                         git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${APP_REPO}.git app-src
                         cd app-src
 
+                        # Ensure at least one tag exists (git-cliff needs tags)
+                        if [ -z \"\$(git tag)\" ]; then
+                            ROOT=\$(git rev-list --max-parents=0 HEAD)
+                            git tag v0.0.0 \"\$ROOT\"
+                            echo \"Created initial tag v0.0.0 at root for changelog\"
+                        fi
+
                         # Generate changelog since last tag
                         git-cliff --latest --strip header \\
                             --output ../RELEASE_NOTES.md
@@ -169,7 +176,7 @@ pipeline {
                         cd ..
 
                         # Prepend service + version header
-                        echo "## ${env.SVC} - ${version} (${releaseDate})\\n" | \\
+                        echo \"## ${env.SVC} - ${version} (${releaseDate})\\n\" | \\
                             cat - RELEASE_NOTES.md > RELEASE_NOTES_FINAL.md
 
                         cat RELEASE_NOTES_FINAL.md

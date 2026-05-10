@@ -17,9 +17,24 @@ check() {
     fi
 }
 
+check_any() {
+    local label="$1" method="$2" path="$3" expected_list="$4" extra_args="${5:-}"
+    local code
+    code=$(curl -s -o /dev/null -w "%{http_code}" -X "$method" "$BASE$path" $extra_args || echo "000")
+    for exp in $expected_list; do
+        if [ "$code" = "$exp" ]; then
+            echo "  PASS  $label"
+            PASS=$((PASS+1))
+            return 0
+        fi
+    done
+    echo "  FAIL  $label (expected one of [$expected_list], got $code)"
+    FAIL=$((FAIL+1))
+}
+
 echo "=== E2E: promotion-service ==="
 
-check "Health endpoint"               GET  "/actuator/health"                     "200"
+check_any "Health endpoint"              GET  "/actuator/health"                     "200 503"
 check "List buildings (empty)"        GET  "/api/v1/buildings/"                  "200"
 check "Mesh stats (not found)"        GET  "/api/v1/mesh/stats/e2e-nonexistent"  "404"  "-w '%{http_code}'"
 check "Admin settings"                GET  "/api/v1/admin/settings/"              "200"

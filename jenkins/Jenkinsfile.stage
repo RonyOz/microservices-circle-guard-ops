@@ -131,7 +131,7 @@ pipeline {
                                 -w /workspace \\
                                 -e SPRING_PROFILES_ACTIVE=test \\
                                 eclipse-temurin:21-jdk-jammy \\
-                                ./gradlew :services:${env.SVC_DIR}:cleanTest :services:${env.SVC_DIR}:test --no-daemon --build-cache
+                                ./gradlew :services:${env.SVC_DIR}:cleanTest :services:${env.SVC_DIR}:test --no-daemon
                         """
                     }
                 }

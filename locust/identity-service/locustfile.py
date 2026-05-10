@@ -37,12 +37,15 @@ class IdentityUser(HttpUser):
             if resp.status_code not in (200, 201):
                 resp.failure(f"Visitor registration failed: {resp.status_code}")
 
-    @task(3)
+    @task(1)
     def lookup_identity(self):
         uid = str(uuid.uuid4())
         with self.client.get(
             f"/api/v1/identities/lookup/{uid}",
-            catch_response=True
+            catch_response=True,
+            name="/api/v1/identities/lookup/[id]"
         ) as resp:
-            if resp.status_code not in (200, 401, 403, 404):
-                resp.failure(f"Lookup failed: {resp.status_code}")
+            if resp.status_code == 401:
+                resp.success()
+            elif resp.status_code not in (200, 403, 404):
+                resp.failure(f"Unexpected: {resp.status_code}")

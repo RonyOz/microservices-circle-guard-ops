@@ -138,8 +138,15 @@ pipeline {
             }
             post {
                 always {
-                    junit allowEmptyResults: true,
-                          testResults: 'app-src/**/build/test-results/**/*.xml, app-src/**/junit.xml, app-src/**/junit/*.xml'
+                    script {
+                        if (env.SVC == 'mobile') {
+                            junit allowEmptyResults: true,
+                                  testResults: 'app-src/mobile/junit.xml'
+                        } else {
+                            junit allowEmptyResults: true,
+                                  testResults: "app-src/services/${env.SVC_DIR}/build/test-results/**/*.xml"
+                        }
+                    }
                     archiveArtifacts artifacts: 'app-src/services/**/build/reports/tests/**', allowEmptyArchive: true
                     script {
                         if (env.SVC == 'mobile') {
@@ -191,7 +198,7 @@ pipeline {
             post {
                 always {
                     junit allowEmptyResults: true,
-                          testResults: 'app-src/**/build/test-results/**/*.xml'
+                          testResults: "app-src/services/${env.SVC_DIR}/build/test-results/**/*.xml"
                     archiveArtifacts allowEmptyArchive: true,
                           artifacts: 'app-src/**/build/reports/tests/**/*'
                     publishHTML(target: [

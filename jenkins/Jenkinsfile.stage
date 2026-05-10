@@ -119,7 +119,7 @@ pipeline {
                                 -v npm-cache-shared:/root/.npm \\
                                 -w /app \\
                                 node:20-alpine \\
-                                sh -c "npm install --no-audit --no-fund --prefer-offline && NODE_OPTIONS='--experimental-vm-modules' npx jest --ci || echo 'No JS tests found'"
+                                sh -c "mkdir -p /app/node_modules/.bin && npm install --no-audit --no-fund --prefer-offline && NODE_OPTIONS='--experimental-vm-modules' npx jest --ci || echo 'No JS tests found'"
                         """
                     } else {
                         sh """

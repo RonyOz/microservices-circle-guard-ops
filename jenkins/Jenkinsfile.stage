@@ -114,9 +114,12 @@ pipeline {
                 script {
                     if (env.SVC == 'mobile') {
                         sh """
-                            cd app-src/mobile
-                            npm install --no-audit --no-fund --prefer-offline
-                            npx jest --ci || echo "No JS tests found"
+                            docker run --rm \\
+                                -v "\${PWD}/app-src/mobile:/app" \\
+                                -v npm-cache-shared:/root/.npm \\
+                                -w /app \\
+                                node:20-alpine \\
+                                sh -c "npm install --no-audit --no-fund --prefer-offline && npx jest --ci || echo 'No JS tests found'"
                         """
                     } else {
                         sh """
@@ -135,16 +138,29 @@ pipeline {
             post {
                 always {
                     junit allowEmptyResults: true,
-                          testResults: 'app-src/**/build/test-results/**/*.xml'
+                          testResults: 'app-src/**/build/test-results/**/*.xml, app-src/**/junit.xml, app-src/**/junit/*.xml'
                     archiveArtifacts artifacts: 'app-src/services/**/build/reports/tests/**', allowEmptyArchive: true
-                    publishHTML(target: [
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: "app-src/services/${env.SVC_DIR}/build/reports/tests/test",
-                        reportFiles: "index.html",
-                        reportName: "Unit Tests - ${env.SVC}"
-                    ])
+                    script {
+                        if (env.SVC == 'mobile') {
+                            publishHTML(target: [
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: "app-src/mobile",
+                                reportFiles: "junit.xml",
+                                reportName: "Unit Tests - ${env.SVC}"
+                            ])
+                        } else {
+                            publishHTML(target: [
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: "app-src/services/${env.SVC_DIR}/build/reports/tests/test",
+                                reportFiles: "index.html",
+                                reportName: "Unit Tests - ${env.SVC}"
+                            ])
+                        }
+                    }
                 }
             }
         }
@@ -229,9 +245,9 @@ pipeline {
                     PF_PID=\$!
                     sleep 3
 
-                    mkdir -p locust-results && chmod 777 locust-results
+                    rm -rf locust-results && mkdir -p locust-results
 
-                    docker run --rm --network=host \\
+                    docker run --rm --network=host --user 0:0 \\
                         -v "\${PWD}:/workspace" \\
                         -w /workspace \\
                         locustio/locust \\

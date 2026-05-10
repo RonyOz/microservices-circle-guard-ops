@@ -196,6 +196,7 @@ pipeline {
             }
             steps {
                 sh """
+                    doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
                     SVC_PORT=\$(kubectl get svc ${env.SVC} -n ${NAMESPACE} -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "80")
                     kubectl port-forward svc/${env.SVC} 18080:\$SVC_PORT -n ${NAMESPACE} &
                     PF_PID=\$!
@@ -221,7 +222,8 @@ pipeline {
             }
             steps {
                 sh """
-                    SVC_PORT=\$(kubectl get svc ${env.SVC} -n ${NAMESPACE} -o jsonpath='{.spec.ports[0].port}')
+                    doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
+                    SVC_PORT=\$(kubectl get svc ${env.SVC} -n ${NAMESPACE} -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "80")
 
                     kubectl port-forward svc/${env.SVC} 18080:\$SVC_PORT -n ${NAMESPACE} &
                     PF_PID=\$!

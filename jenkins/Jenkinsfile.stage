@@ -167,33 +167,34 @@ pipeline {
                 always {
                     junit allowEmptyResults: true,
                           testResults: 'app-src/**/build/test-results/**/*.xml'
+                    archiveArtifacts allowEmptyArchive: true,
+                          artifacts: 'app-src/**/build/reports/tests/**/*'
                 }
             }
         }
 
         // ── E2E tests ────────────────────────────────────────────
         stage('E2E tests') {
+            when {
+                expression { fileExists("e2e/${env.SVC}/e2e.sh") }
+            }
             steps {
                 sh """
                     SVC_PORT=\$(kubectl get svc ${env.SVC} -n ${NAMESPACE} -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "80")
-
                     kubectl port-forward svc/${env.SVC} 18080:\$SVC_PORT -n ${NAMESPACE} &
                     PF_PID=\$!
-                    trap "kill \$PF_PID 2>/dev/null || true" EXIT
-                    sleep 3
-
-                    echo "=== Smoke: health endpoint ==="
-                    HTTP_CODE=\$(curl -s -o /dev/null -w "%{http_code}" http://localhost:18080/actuator/health || echo "000")
-                    echo "Health check: HTTP \$HTTP_CODE"
-                    if [ "\$HTTP_CODE" != "200" ] && [ "\$HTTP_CODE" != "000" ]; then
-                        echo "WARNING: Health endpoint returned \$HTTP_CODE"
-                    fi
-
-                    echo "=== Smoke: service info ==="
-                    curl -s http://localhost:18080/actuator/info 2>/dev/null | head -c 200 || echo "info endpoint unavailable"
-
+                    sleep 4
+                    echo "Running E2E tests for ${env.SVC}..."
+                    bash e2e/${env.SVC}/e2e.sh
+                    EC=\$?
                     kill \$PF_PID 2>/dev/null || true
+                    exit \$EC
                 """
+            }
+            post {
+                always {
+                    sh "kill \$(lsof -ti:18080) 2>/dev/null || true"
+                }
             }
         }
 
@@ -212,7 +213,10 @@ pipeline {
 
                     mkdir -p locust-results
 
-                    locust \\
+                    docker run --rm --network=host \\
+                        -v "\${PWD}:/workspace" \\
+                        -w /workspace \\
+                        locustio/locust \\
                         -f locust/${env.SVC}/locustfile.py \\
                         --headless \\
                         --host=http://localhost:18080 \\

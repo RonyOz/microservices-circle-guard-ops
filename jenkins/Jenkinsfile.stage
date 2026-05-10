@@ -137,6 +137,14 @@ pipeline {
                     junit allowEmptyResults: true,
                           testResults: 'app-src/**/build/test-results/**/*.xml'
                     archiveArtifacts artifacts: 'app-src/services/**/build/reports/tests/**', allowEmptyArchive: true
+                    publishHTML(target: [
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: "app-src/services/${env.SVC_DIR}/build/reports/tests/test",
+                        reportFiles: "index.html",
+                        reportName: "Unit Tests - ${env.SVC}"
+                    ])
                 }
             }
         }
@@ -169,6 +177,14 @@ pipeline {
                           testResults: 'app-src/**/build/test-results/**/*.xml'
                     archiveArtifacts allowEmptyArchive: true,
                           artifacts: 'app-src/**/build/reports/tests/**/*'
+                    publishHTML(target: [
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: "app-src/services/${env.SVC_DIR}/build/reports/tests/test",
+                        reportFiles: "index.html",
+                        reportName: "Integration Tests - ${env.SVC}"
+                    ])
                 }
             }
         }

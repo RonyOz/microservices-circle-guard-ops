@@ -165,7 +165,7 @@ pipeline {
 
                         # Ensure at least one tag exists (git-cliff needs tags)
                         if [ -z \"\$(git tag)\" ]; then
-                            ROOT=\$(git rev-list --max-parents=0 HEAD)
+                            ROOT=\$(git rev-list --max-parents=0 HEAD | tail -1)
                             git tag v0.0.0 \"\$ROOT\"
                             echo \"Created initial tag v0.0.0 at root for changelog\"
                         fi

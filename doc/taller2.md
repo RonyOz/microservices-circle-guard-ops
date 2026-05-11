@@ -2,6 +2,8 @@
 **Taller 2: Pruebas y Lanzamiento**  
 ---
 
+
+
 ## 1. Configuración del entorno Jenkins, Docker y Kubernetes
 
 ### 1.1 Infraestructura base
@@ -585,7 +587,5 @@ Los reportes JUnit de todas las pruebas se adjuntan en los artefactos del build.
 - El presente documento cubre la documentación detallada solicitada, estructurada según los puntos del taller.  
 - Se ha elaborado un **video de máximo 8 minutos** que recorre: configuración de Jenkins, ejecución de los pipelines dev/stage/prod, revisión de resultados de pruebas (unitarias, integración, E2E, Locust) y despliegue final en producción con release notes.  
 - Se entrega un archivo `.zip` con:
-  - Pipelines (Jenkinsfiles del repositorio de aplicación y operaciones).
-  - Código fuente de las pruebas añadidas (carpetas `test` modificadas, scripts de Locust).
-  - Chart de Helm de los servicios.
-  - Configuración de `git-cliff`.
+  - app-repo
+  - ops-repo

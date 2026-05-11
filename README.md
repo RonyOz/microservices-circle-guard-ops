@@ -2,6 +2,8 @@
 
 Repositorio de operaciones para CircleGuard. Contiene la infraestructura como código (Terraform), los Helm charts de los microservicios y los pipelines de Jenkins para los tres ambientes del taller 2.
 
+![diagrama de arquitectura](doc/img/arquitectura.png)
+
 ---
 
 ## Estructura del repositorio

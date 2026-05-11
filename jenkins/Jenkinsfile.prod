@@ -163,15 +163,15 @@ pipeline {
                         git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${APP_REPO}.git app-src
                         cd app-src
 
-                        # Ensure at least one tag exists (git-cliff needs tags)
-                        if [ -z \"\$(git tag)\" ]; then
+                        # Ensure at least one tag exists so git-cliff has a range
+                        if [ -z \"\$(git tag | head -1)\" ]; then
                             ROOT=\$(git rev-list --max-parents=0 HEAD | tail -1)
                             git tag v0.0.0 \"\$ROOT\"
-                            echo \"Created initial tag v0.0.0 at root for changelog\"
+                            echo \"Created initial tag v0.0.0 at root\"
                         fi
 
                         # Generate changelog since last tag
-                        git-cliff --latest --strip header \\
+                        git-cliff --config ../cliff.toml --latest --strip header \\
                             --output ../RELEASE_NOTES.md
 
                         cd ..

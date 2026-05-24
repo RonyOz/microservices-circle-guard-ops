@@ -1,0 +1,289 @@
+meta:
+  profile: engineering-review
+  theme: tech-blue
+  layout: horizontal
+  canvas: 1600x900
+  routing: orthogonal
+  title: "CircleGuard — Cloud Architecture (Proyecto Final IngeSoft V)"
+  description: "AWS-primary platform (EKS + ECR + GHA OIDC), Azure secondary for Multi-Cloud bonus. Replaces Taller 2 DigitalOcean + Jenkins design."
+  legend: "Solid arrows = runtime/control flow. Dashed arrows = build/deploy pipeline. Dotted = optional/multi-cloud bonus."
+
+modules:
+  - id: dev_repo
+    label: "microservices-circle-guard-dev (App repo)"
+    style:
+      strokeColor: "#4D4D4D"
+      dashed: 0
+  - id: ops_repo
+    label: "microservices-circle-guard-ops (Ops repo)"
+    style:
+      strokeColor: "#4D4D4D"
+      dashed: 0
+  - id: aws_global
+    label: "AWS account 354287460358 — Global services (us-east-1)"
+    style:
+      strokeColor: "#FF9900"
+      dashed: 1
+  - id: aws_vpc
+    label: "AWS VPC circleguard-vpc (10.0.0.0/16) — us-east-1"
+    style:
+      strokeColor: "#0066CC"
+      dashed: 1
+  - id: azure_bonus
+    label: "Azure (Bonus 1: Multi-Cloud)"
+    style:
+      strokeColor: "#0078D4"
+      dashed: 1
+
+nodes:
+  # ── Actor ───────────────────────────────────────────────────────────
+  - id: dev_user
+    label: Developer
+    type: user
+    position: { x: 40, y: 280 }
+
+  # ── DEV REPO ────────────────────────────────────────────────────────
+  - id: dev_services
+    label: "Spring Boot microservices\nauth · identity · gateway · form\npromotion · notification · file · dashboard"
+    type: service
+    module: dev_repo
+    position: { x: 220, y: 140 }
+    style: { fillColor: "#f5f5f5", strokeColor: "#666666", fontSize: 10 }
+  - id: dev_mobile
+    label: "Mobile (Expo / React Native)"
+    type: service
+    module: dev_repo
+    position: { x: 220, y: 220 }
+    style: { fillColor: "#f5f5f5", strokeColor: "#666666", fontSize: 10 }
+  - id: dev_gha
+    label: "GHA workflows (per service)\n_reusable-service-ci.yml\nbuild · test · scan · push to ECR"
+    icon: devops.github-actions
+    type: service
+    module: dev_repo
+    position: { x: 220, y: 280 }
+    style: { fillColor: "#f5f5f5", strokeColor: "#666666", fontSize: 10 }
+  - id: dev_compose
+    label: "docker-compose.dev.yml (local stack)\nPostgres · Neo4j · Kafka · Redis · LDAP"
+    type: service
+    module: dev_repo
+    position: { x: 220, y: 350 }
+    style: { fillColor: "#ffffff", strokeColor: "#999999", dashed: 1, fontSize: 9 }
+
+  # ── OPS REPO ────────────────────────────────────────────────────────
+  - id: ops_tf
+    label: "Terraform (terraform/aws/)\nmodules/{vpc, eks-cluster, ecr,\ngithub-oidc} · S3 backend"
+    icon: devops.terraform
+    type: service
+    module: ops_repo
+    position: { x: 220, y: 500 }
+    style: { fillColor: "#f5f5f5", strokeColor: "#666666", fontSize: 10 }
+  - id: ops_helm
+    label: "Helm charts (services/<svc>/chart)\nvalues per env"
+    icon: devops.helm
+    type: service
+    module: ops_repo
+    position: { x: 220, y: 580 }
+    style: { fillColor: "#f5f5f5", strokeColor: "#666666", fontSize: 10 }
+  - id: ops_gha
+    label: "GHA workflows\ndeploy-dev/stage/prod/infra.yml"
+    icon: devops.github-actions
+    type: service
+    module: ops_repo
+    position: { x: 220, y: 660 }
+    style: { fillColor: "#f5f5f5", strokeColor: "#666666", fontSize: 10 }
+  - id: ops_locust
+    label: "Locust + ZAP + Trivy (in stage workflow)"
+    type: service
+    module: ops_repo
+    position: { x: 220, y: 730 }
+    style: { fillColor: "#ffffff", strokeColor: "#999999", dashed: 1, fontSize: 9 }
+
+  # ── AWS GLOBAL SERVICES ────────────────────────────────────────────
+  - id: ecr
+    label: "ECR\ncircleguard (IMMUTABLE)"
+    icon: aws.ecr
+    type: service
+    module: aws_global
+    position: { x: 620, y: 200 }
+    style: { fillColor: "#dae8fc", strokeColor: "#6c8ebf", fontSize: 10 }
+  - id: oidc_role
+    label: "IAM OIDC + Role\ncircleguard-gha-role"
+    icon: aws.iam
+    type: service
+    module: aws_global
+    position: { x: 620, y: 300 }
+    style: { fillColor: "#dae8fc", strokeColor: "#6c8ebf", fontSize: 10 }
+  - id: s3_state
+    label: "S3 circleguard-tfstate\n+ S3-native lock"
+    icon: aws.s3
+    type: database
+    module: aws_global
+    position: { x: 620, y: 400 }
+    style: { fillColor: "#dae8fc", strokeColor: "#6c8ebf", fontSize: 10 }
+  - id: secrets
+    label: "Secrets Manager\n(runtime via IRSA)"
+    icon: aws.secrets-manager
+    type: service
+    module: aws_global
+    position: { x: 620, y: 500 }
+    style: { fillColor: "#dae8fc", strokeColor: "#6c8ebf", fontSize: 10 }
+  - id: budgets
+    label: "Budgets\n$20/mo alert"
+    icon: aws.budgets
+    type: service
+    module: aws_global
+    position: { x: 620, y: 600 }
+    style: { fillColor: "#dae8fc", strokeColor: "#6c8ebf", fontSize: 10 }
+
+  # ── AWS VPC + EKS ───────────────────────────────────────────────────
+  - id: alb
+    label: "ALB (public subnets)\n+ Ingress controller + cert-manager"
+    icon: aws.alb
+    type: load_balancer
+    module: aws_vpc
+    position: { x: 1010, y: 140 }
+    style: { fillColor: "#fff2cc", strokeColor: "#d6b656", fontSize: 10 }
+  - id: ns_dev
+    label: "namespace: dev\ngateway · auth · identity · form · promotion\nnotification · file · dashboard"
+    icon: kubernetes.namespace
+    type: service
+    module: aws_vpc
+    position: { x: 920, y: 240 }
+    style: { fillColor: "#f5f5f5", strokeColor: "#999999", fontSize: 10 }
+  - id: ns_stage
+    label: "namespace: stage\n(replicas + Resilience4j CB)"
+    icon: kubernetes.namespace
+    type: service
+    module: aws_vpc
+    position: { x: 920, y: 340 }
+    style: { fillColor: "#f5f5f5", strokeColor: "#999999", fontSize: 10 }
+  - id: ns_prod
+    label: "namespace: production\n(replicas + HPA/KEDA)"
+    icon: kubernetes.namespace
+    type: service
+    module: aws_vpc
+    position: { x: 1180, y: 340 }
+    style: { fillColor: "#f5f5f5", strokeColor: "#999999", fontSize: 10 }
+  - id: data_plane
+    label: "Data plane (Helm chart per ns)\nPostgreSQL · Neo4j · Kafka · Redis · LDAP\nZookeeper · MailHog"
+    icon: kubernetes.statefulset
+    type: database
+    module: aws_vpc
+    position: { x: 920, y: 460 }
+    style: { fillColor: "#f5f5f5", strokeColor: "#999999", fontSize: 10 }
+  - id: observability
+    label: "Observability (Section 7 — planned)\nPrometheus · Grafana · Jaeger\nELK (Elastic + Kibana + Filebeat)"
+    icon: kubernetes.pod
+    type: service
+    module: aws_vpc
+    position: { x: 920, y: 580 }
+    style: { fillColor: "#ffffff", strokeColor: "#999999", dashed: 1, fontSize: 9 }
+  - id: istio
+    label: "Istio (Bonus 2 — planned)\nmTLS · VirtualService · Kiali"
+    type: service
+    module: aws_vpc
+    position: { x: 1180, y: 580 }
+    style: { fillColor: "#ffffff", strokeColor: "#999999", dashed: 1, fontSize: 9 }
+
+  # ── CLIENTS ─────────────────────────────────────────────────────────
+  - id: client
+    label: "Web client / Mobile app"
+    type: user
+    position: { x: 1420, y: 150 }
+
+  # ── AZURE (Bonus) ───────────────────────────────────────────────────
+  - id: azure_aks
+    label: "AKS (cross-cloud deploy)\nauth · promotion · gateway · notification"
+    icon: azure.aks
+    type: service
+    module: azure_bonus
+    position: { x: 1420, y: 460 }
+    style: { fillColor: "#deeaf6", strokeColor: "#0078D4", fontSize: 10 }
+  - id: azure_acr
+    label: "ACR (image mirror)"
+    icon: azure.acr
+    type: database
+    module: azure_bonus
+    position: { x: 1420, y: 560 }
+    style: { fillColor: "#deeaf6", strokeColor: "#0078D4", fontSize: 10 }
+
+edges:
+  # ── Dev workflow ────────────────────────────────────────────────────
+  - from: dev_user
+    to: dev_services
+    type: primary
+    label: "git push"
+  - from: dev_services
+    to: dev_gha
+    type: dependency
+    label: "triggers on push"
+  - from: dev_gha
+    to: ecr
+    type: data
+    label: "build & push image (OIDC)"
+  - from: dev_gha
+    to: ops_gha
+    type: data
+    label: "repository_dispatch"
+
+  # ── Ops workflow ────────────────────────────────────────────────────
+  - from: ops_tf
+    to: s3_state
+    type: data
+    label: "state backend"
+  - from: ops_tf
+    to: aws_vpc
+    type: data
+    label: "terraform apply"
+  - from: ops_gha
+    to: oidc_role
+    type: data
+    label: "AssumeRoleWithWebIdentity"
+  - from: oidc_role
+    to: ns_dev
+    type: data
+    label: "helm upgrade (kubectl via OIDC)"
+
+  # ── Runtime ─────────────────────────────────────────────────────────
+  - from: client
+    to: alb
+    type: primary
+    label: "HTTPS (TLS)"
+  - from: alb
+    to: ns_dev
+    type: primary
+    label: "route → gateway-service"
+  - from: ns_dev
+    to: data_plane
+    type: data
+    label: "persist · cache · events"
+  - from: ns_stage
+    to: data_plane
+    type: data
+  - from: ns_prod
+    to: data_plane
+    type: data
+  - from: ns_dev
+    to: ecr
+    type: data
+    label: "pull images"
+  - from: ns_dev
+    to: secrets
+    type: data
+    label: "IRSA → secret"
+
+  # ── Observability ──────────────────────────────────────────────────
+  - from: ns_dev
+    to: observability
+    type: optional
+    label: "scrape /metrics · OTel traces"
+
+  # ── Multi-cloud bonus ──────────────────────────────────────────────
+  - from: dev_gha
+    to: azure_acr
+    type: optional
+    label: "(bonus) push to ACR"
+  - from: azure_acr
+    to: azure_aks
+    type: optional
+    label: "pull images"

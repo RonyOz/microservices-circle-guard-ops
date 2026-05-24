@@ -1,6 +1,6 @@
 # Terraform — nunca commitear estado ni credenciales
 terraform/.terraform/
-terraform/.terraform.lock.hcl
+.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/terraform.tfvars

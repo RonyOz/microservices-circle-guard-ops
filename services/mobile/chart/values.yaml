@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: registry.digitalocean.com/circleguard/circleguard-services
+  repository: ""  # set at deploy time by GHA: --set image.repository=<registry>/circleguard
   pullPolicy: IfNotPresent
   tag: ""  # Overridden by pipeline: --set image.tag=mobile-sha-<commit>
 

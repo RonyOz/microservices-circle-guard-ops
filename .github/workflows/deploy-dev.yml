@@ -1,0 +1,64 @@
+name: Deploy — dev
+
+on:
+  repository_dispatch:
+    types: [deploy-dev]
+
+env:
+  K8S_NAMESPACE: dev
+  CLUSTER_NAME: circleguard-eks
+  AWS_REGION: us-east-1
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Resolve registry URL
+        id: registry
+        run: |
+          REGISTRY="${{ github.event.client_payload.registry_url }}"
+          if [ -z "$REGISTRY" ]; then
+            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+            echo "registry_url not in payload — derived: $REGISTRY"
+          fi
+          echo "url=$REGISTRY" >> $GITHUB_OUTPUT
+
+      - name: Helm lint
+        run: |
+          helm lint services/${{ github.event.client_payload.service }}/chart/
+
+      - name: Deploy to ${{ env.K8S_NAMESPACE }}
+        run: |
+          helm upgrade --install ${{ github.event.client_payload.service }} \
+            services/${{ github.event.client_payload.service }}/chart/ \
+            --namespace ${{ env.K8S_NAMESPACE }} \
+            --create-namespace \
+            --set image.repository=${{ steps.registry.outputs.url }}/circleguard \
+            --set image.tag=${{ github.event.client_payload.service }}-${{ github.event.client_payload.image_tag }} \
+            --wait --timeout 5m
+
+      - name: Smoke test
+        run: |
+          if [ -f "e2e/${{ github.event.client_payload.service }}/e2e.sh" ]; then
+            chmod +x e2e/${{ github.event.client_payload.service }}/e2e.sh
+            ./e2e/${{ github.event.client_payload.service }}/e2e.sh
+          else
+            echo "No smoke test for ${{ github.event.client_payload.service }}"
+          fi

@@ -1,0 +1,55 @@
+replicaCount: 1
+
+image:
+  repository: ""  # set at deploy time by GHA: --set image.repository=<registry>/circleguard
+  pullPolicy: IfNotPresent
+  tag: ""  # Overridden by pipeline: --set image.tag=<service>-sha-<commit>
+
+service:
+  type: ClusterIP
+  port: 8088
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+startupProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8088
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 12
+
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8088
+  initialDelaySeconds: 0
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+    port: 8088
+  initialDelaySeconds: 20
+  periodSeconds: 5
+
+env:
+  AWS_REGION: "us-east-1"
+  S3_BUCKET: "circleguard-files"
+
+envFrom:
+  - secretRef:
+      name: file-service-secret
+      # Keys expected: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (or use IRSA — preferred)

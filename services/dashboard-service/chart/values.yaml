@@ -1,0 +1,56 @@
+replicaCount: 1
+
+image:
+  repository: ""  # set at deploy time by GHA: --set image.repository=<registry>/circleguard
+  pullPolicy: IfNotPresent
+  tag: ""  # Overridden by pipeline: --set image.tag=<service>-sha-<commit>
+
+service:
+  type: ClusterIP
+  port: 8087
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+startupProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8087
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 12
+
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8087
+  initialDelaySeconds: 0
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+    port: 8087
+  initialDelaySeconds: 20
+  periodSeconds: 5
+
+env:
+  DB_HOST: "postgres"
+  DB_NAME: "circleguard_dashboard"
+  PROMOTION_SERVICE_URL: "http://promotion-service:8086"
+
+envFrom:
+  - secretRef:
+      name: dashboard-service-secret
+      # Keys expected: DB_USERNAME, DB_PASSWORD

@@ -4,7 +4,7 @@
 # These resources are managed outside Terraform to avoid bootstrap chicken-and-egg.
 set -euo pipefail
 
-BUCKET="circleguard-tfstate"
+BUCKET="circleguard-tfstate-1779832348"
 TABLE="circleguard-tflock"
 REGION="us-east-1"
 

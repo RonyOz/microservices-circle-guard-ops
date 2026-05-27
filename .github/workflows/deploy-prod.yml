@@ -64,6 +64,17 @@ jobs:
           fi
           echo "url=$REGISTRY" >> $GITHUB_OUTPUT
 
+      - name: Create service K8s secret
+        run: |
+          kubectl create secret generic ${{ github.event.client_payload.service }}-secret \
+            --from-literal=DB_USERNAME=circleguard \
+            --from-literal=DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+            --from-literal=NEO4J_USERNAME=neo4j \
+            --from-literal=NEO4J_PASSWORD=${{ secrets.DB_PASSWORD }} \
+            --from-literal=JWT_SECRET=${{ secrets.JWT_SECRET }} \
+            --namespace ${{ env.K8S_NAMESPACE }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy to ${{ env.K8S_NAMESPACE }} with --atomic
         run: |
           helm upgrade --install ${{ github.event.client_payload.service }} \

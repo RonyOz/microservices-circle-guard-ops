@@ -1,0 +1,193 @@
+# Branching Strategy
+
+Debido a que software e infraestructura tienen ciclos de vida y riesgos diferentes, CircleGuard aplica estrategias de branching especializadas por repositorio.
+
+| Repositorio | Estrategia | Razón |
+|-------------|-----------|-------|
+| `microservices-circle-guard-dev` | GitFlow | Ciclo de release controlado; features paralelas; hotfixes urgentes |
+| `microservices-circle-guard-ops` | Trunk-Based Development | Cambios de infraestructura pequeños y frecuentes; deploy inmediato requerido |
+
+---
+
+## 2.1 GitFlow para desarrollo (`microservices-circle-guard-dev`)
+
+### Rationale
+
+El repositorio de aplicación maneja 8 microservicios con features que se desarrollan en paralelo, versiones de release formales, y la posibilidad de hotfixes urgentes en producción sin mezclar código incompleto de desarrollo. GitFlow separa estos ciclos claramente.
+
+### Ramas permanentes
+
+| Rama | Estado que representa | Deploy destino |
+|------|-----------------------|---------------|
+| `main` | Estado de producción — código en `production` namespace | EKS `production` via `deploy-prod.yml` |
+| `develop` | Estado de staging — integración continua de features | EKS `stage` via `deploy-stage.yml` |
+
+**Regla crítica:** Nunca se hace merge directo de `feature/*` a `main`. Todo feature pasa por `develop` primero.
+
+### Ramas de corta duración
+
+| Tipo | Patrón | Nace desde | Se mergea a | Propósito |
+|------|--------|-----------|------------|-----------|
+| Feature | `feature/<historia>` | `develop` | `develop` | Nueva funcionalidad por historia de usuario |
+| Hotfix | `hotfix/<descripción>` | `main` | `main` + `develop` | Corrección urgente en producción |
+| Release | `release/<version>` | `develop` | `main` + `develop` | Preparación de release (bumps de versión, docs) |
+
+### Flujo de una feature nueva
+
+```
+develop
+  │
+  ├── feature/us-02-confirm-covid-case
+  │        │  (desarrollo, tests)
+  │        ▼
+  │   PR: feature/* → develop
+  │        │  (CI: build + test + helm lint)
+  │        ▼
+  │   merge a develop ──→ deploy-stage.yml dispara
+  │                          (E2E + Locust en stage namespace)
+  │
+  ├── (cuando listo para release)
+  │   release/1.3.0 nace desde develop
+  │        │  (version bump, changelog draft)
+  │        ▼
+  │   PR: release/* → main
+  │        │  (aprobación manual requerida)
+  │        ▼
+  │   merge a main ──→ deploy-prod.yml dispara
+  │                      (--atomic + GitHub Release con git-cliff)
+  │        │
+  │        └──→ back-merge release/* → develop
+```
+
+### Flujo de un hotfix urgente
+
+```
+main (producción rota)
+  │
+  ├── hotfix/auth-token-expiry-fix
+  │        │  (fix mínimo, tests)
+  │        ▼
+  │   PR: hotfix/* → main
+  │        │  (aprobación requerida — es producción)
+  │        ▼
+  │   merge a main ──→ deploy-prod.yml dispara
+  │        │
+  │        └──→ back-merge hotfix/* → develop
+  │                  (para que develop no pierda el fix)
+```
+
+**Por qué back-merge es obligatorio:** Si el hotfix no se reintegra a `develop`, la siguiente release sobreescribirá el fix en producción.
+
+### Convención de nombres
+
+```
+feature/us-01-qr-campus-checkin
+feature/us-03-health-survey-submission
+hotfix/promotion-kafka-null-pointer
+release/1.4.0
+```
+
+### Commit message convention
+
+Todos los commits siguen **Conventional Commits** (`<type>(<scope>): <description>`):
+
+| Tipo | Cuándo usar |
+|------|------------|
+| `feat` | Nueva funcionalidad |
+| `fix` | Bug fix |
+| `chore` | Tooling, deps, config |
+| `refactor` | Reestructuración sin cambio de comportamiento |
+| `docs` | Solo documentación |
+| `test` | Agregar o actualizar tests |
+| `perf` | Mejoras de performance |
+
+`git-cliff` en el ops repo parsea estos tipos para generar el CHANGELOG automático en cada GitHub Release de producción.
+
+### PR policy (dev repo)
+
+- PRs obligatorios para todo merge — no direct push a `main` ni `develop`
+- PR title sigue Conventional Commits
+- CI debe pasar: `./gradlew test`, Helm lint, Docker build
+- Squash merge para `feature/*` → `develop` (historia lineal)
+- Merge commit para `release/*` → `main` (preservar el tag del release)
+- Mínimo 1 aprobación
+
+---
+
+## 2.2 Trunk-Based Development para infraestructura (`microservices-circle-guard-ops`)
+
+### Rationale
+
+El repositorio de ops maneja workflows de CI/CD, Helm charts, y Terraform. Los cambios son típicamente pequeños (ajustar un probe, actualizar un timeout, añadir un step de CI) y deben llegar a `main` rápidamente porque `main` es lo que el cluster consume. Una rama de ops que vive 2 semanas puede divergir de la realidad del cluster.
+
+Trunk-Based Development minimiza ese drift: ramas cortas (máx 2 días), PR inmediato, merge frecuente.
+
+### Rama permanente
+
+| Rama | Estado que representa |
+|------|-----------------------|
+| `main` | Única fuente de verdad — lo que está deployado en el cluster |
+
+No existe `develop` en ops. No hay `feature/*` de larga duración. Todo va directo a `main` via PR.
+
+### Ramas de corta duración
+
+| Tipo | Patrón | Max lifetime | Ejemplo |
+|------|--------|-------------|---------|
+| Update | `update/<componente>` | 2 días | `update/auth-service-helm-probes` |
+| Fix | `fix/<descripción>` | 2 días | `fix/deploy-dev-port-forward` |
+
+### Flujo
+
+```
+main
+  │
+  ├── update/prometheus-helm-chart
+  │        │  (cambio pequeño, probado en dev)
+  │        ▼
+  │   PR: update/* → main
+  │        │  (CI: helm lint, workflow syntax check)
+  │        ▼
+  │   Squash merge → main
+  │        │
+  │        └──→ (si afecta un servicio) deploy-dev.yml dispara automáticamente
+```
+
+### PR policy (ops repo)
+
+- PRs obligatorios, no direct push a `main`
+- Helm lint debe pasar en CI antes de merge
+- Mínimo 1 aprobación
+- Squash merge siempre
+- Branches se eliminan inmediatamente post-merge
+
+### Recomended branch protection rules (para `main` en ambos repos)
+
+Aplicar en **Settings → Branches → Branch protection rules**:
+
+```
+Branch name pattern: main
+✅ Require a pull request before merging
+  ✅ Require approvals: 1
+  ✅ Dismiss stale PR approvals when new commits are pushed
+✅ Require status checks to pass before merging
+✅ Require branches to be up to date before merging
+✅ Do not allow bypassing the above settings
+❌ Allow force pushes   (disabled)
+❌ Allow deletions      (disabled)
+```
+
+Para el dev repo, aplicar la misma protección también a `develop`.
+
+---
+
+## Resumen comparativo
+
+| Aspecto | Dev repo (GitFlow) | Ops repo (TBD) |
+|---------|-------------------|----------------|
+| Ramas permanentes | `main`, `develop` | `main` |
+| Feature lifetime | Semanas (por sprint) | Máx 2 días |
+| Release process | `release/*` branch + tag | Directo en `main` |
+| Hotfix | `hotfix/*` desde `main` | `fix/*` desde `main` |
+| Trigger de deploy | merge a `develop` → stage; merge a `main` → prod | merge a `main` → deploy via `repository_dispatch` |
+| Versioning | SemVer tags en `main` | Sin versioning propio — versiona servicios |

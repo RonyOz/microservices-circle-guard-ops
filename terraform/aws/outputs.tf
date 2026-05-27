@@ -35,3 +35,8 @@ output "eks_cluster_endpoint" {
 output "eks_oidc_provider_arn" {
   value = module.eks.oidc_provider_arn
 }
+
+output "eso_irsa_role_arn" {
+  description = "IRSA role ARN for external-secrets-operator — annotate the ESO service account with this."
+  value       = module.irsa_secrets.eso_role_arn
+}

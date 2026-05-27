@@ -28,6 +28,8 @@ jobs:
     defaults:
       run:
         working-directory: ${{ env.TF_DIR }}
+    outputs:
+      eso_role_arn: ${{ steps.tf_outputs.outputs.eso_role_arn }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,6 +41,8 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
 
       - name: Terraform init
         run: terraform init
@@ -55,7 +59,64 @@ jobs:
         if: ${{ github.event.inputs.action == 'apply' }}
         run: terraform apply tfplan
 
+      - name: Capture Terraform outputs
+        id: tf_outputs
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: |
+          echo "eso_role_arn=$(terraform output -raw eso_irsa_role_arn)" >> $GITHUB_OUTPUT
+
       - name: Terraform destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         run: |
           terraform destroy -var-file=terraform.${{ github.event.inputs.environment }}.tfvars -auto-approve
+
+  bootstrap-eso:
+    needs: terraform
+    if: ${{ github.event.inputs.action == 'apply' }}
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: ${{ github.event.inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name circleguard-eks --region ${{ env.AWS_REGION }}
+
+      - name: Install external-secrets-operator
+        run: |
+          helm repo add external-secrets https://charts.external-secrets.io
+          helm repo update
+          helm upgrade --install external-secrets external-secrets/external-secrets \
+            --namespace external-secrets \
+            --create-namespace \
+            --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=${{ needs.terraform.outputs.eso_role_arn }} \
+            --wait --timeout 3m
+
+      - name: Seed Secrets Manager secret
+        run: |
+          SECRET_NAME="circleguard/${ENVIRONMENT}"
+          CURRENT=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text 2>/dev/null || echo "")
+          if [ -z "$CURRENT" ] || [ "$CURRENT" = "null" ]; then
+            aws secretsmanager put-secret-value \
+              --secret-id "$SECRET_NAME" \
+              --secret-string "{\"DB_USERNAME\":\"circleguard\",\"DB_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"NEO4J_USERNAME\":\"neo4j\",\"NEO4J_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"JWT_SECRET\":\"${{ secrets.JWT_SECRET }}\"}"
+            echo "Seeded SM secret $SECRET_NAME"
+          else
+            echo "SM secret $SECRET_NAME already has a value — skipping seed"
+          fi
+
+      - name: Deploy infrastructure chart with ExternalSecrets
+        run: |
+          NAMESPACE=${{ github.event.inputs.environment }}
+          helm upgrade --install circleguard-infra infrastructure/chart/ \
+            --namespace "$NAMESPACE" \
+            --create-namespace \
+            --reuse-values \
+            --set externalSecrets.smSecretPath="circleguard/${NAMESPACE}" \
+            --wait --timeout 5m

@@ -88,3 +88,13 @@ module "eks" {
   node_max_count      = var.node_max_count
   tags                = local.common_tags
 }
+
+# ── Secrets Manager + IRSA for external-secrets-operator ─────────────────────
+
+module "irsa_secrets" {
+  source = "./modules/irsa-secrets"
+
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  tags              = local.common_tags
+}

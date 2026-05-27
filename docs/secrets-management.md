@@ -100,15 +100,45 @@ Created once per namespace by `scripts/bootstrap-cluster.sh`:
 
 ---
 
-## Roadmap: AWS Secrets Manager + IRSA
+## AWS Secrets Manager + IRSA (implemented)
 
-For production hardening, runtime secrets should move to AWS Secrets Manager:
+Runtime secrets (`DB_PASSWORD`, `JWT_SECRET`, `NEO4J_PASSWORD`) are stored in AWS Secrets Manager and delivered to pods via external-secrets-operator (ESO) without storing credentials in CI environment at pod runtime.
 
-1. Store `DB_PASSWORD` and `JWT_SECRET` in Secrets Manager under path `/circleguard/<env>/<key>`
-2. Create per-service IRSA role (Terraform `modules/irsa/`) with read-only access to its secrets
-3. Deploy `external-secrets-operator` or Secrets Store CSI Driver to the cluster
-4. Replace K8s Secret creation step in workflows with `ExternalSecret` CRD that pulls from Secrets Manager
+### Architecture
 
-This removes `DB_PASSWORD` and `JWT_SECRET` from GHA Secrets entirely — only `AWS_ROLE_ARN` remains.
+```
+AWS Secrets Manager
+  circleguard/dev       ← JSON with all runtime keys
+  circleguard/stage
+  circleguard/production
 
-**Current status:** EKS OIDC provider is configured (prerequisite done). IRSA roles and ExternalSecret CRDs are not yet implemented.
+IRSA role: circleguard-eso-role
+  → bound to ServiceAccount external-secrets/external-secrets
+  → policy: secretsmanager:GetSecretValue on circleguard/* paths
+
+external-secrets-operator (Helm, namespace: external-secrets)
+  → SecretStore per namespace (circleguard-secret-store)
+  → ExternalSecret per service → creates <service>-secret K8s Secret
+
+Pods
+  → envFrom.secretRef: <service>-secret (unchanged)
+```
+
+### How deploy workflows interact with SM
+
+Each deploy workflow run calls `aws secretsmanager put-secret-value` to push current GHA secret values to SM before deploying. ESO reconciles and syncs to K8s secrets within its `refreshInterval` (1h).
+
+### Terraform resources (module irsa-secrets)
+
+| Resource | Name |
+|----------|------|
+| `aws_secretsmanager_secret` | `circleguard/dev`, `circleguard/stage`, `circleguard/production` |
+| `aws_iam_role` | `circleguard-eso-role` |
+| `aws_iam_policy` | `circleguard-eso-role-sm-read` |
+
+### Rotation procedure
+
+1. Generate new value: `openssl rand -base64 32`
+2. Update GHA Secret in GitHub UI (Settings → Secrets → Actions)
+3. Re-run any deploy workflow — it pushes new value to SM automatically
+4. ESO syncs within 1h (force: `kubectl annotate externalsecret <name> force-sync=$(date +%s) -n <ns>`)

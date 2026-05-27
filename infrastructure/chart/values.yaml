@@ -44,3 +44,17 @@ openldap:
 mailhog:
   image: mailhog/mailhog
   tag: v1.0.1
+
+externalSecrets:
+  enabled: true
+  secretStoreName: circleguard-secret-store
+  smSecretPath: ""  # set at deploy time: --set externalSecrets.smSecretPath=circleguard/<namespace>
+  services:
+    - auth-service
+    - identity-service
+    - promotion-service
+    - notification-service
+    - form-service
+    - gateway-service
+    - dashboard-service
+    - file-service

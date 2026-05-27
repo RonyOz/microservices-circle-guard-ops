@@ -40,16 +40,11 @@ jobs:
           fi
           echo "url=$REGISTRY" >> $GITHUB_OUTPUT
 
-      - name: Create service K8s secret
+      - name: Sync runtime secrets to Secrets Manager
         run: |
-          kubectl create secret generic ${{ github.event.client_payload.service }}-secret \
-            --from-literal=DB_USERNAME=circleguard \
-            --from-literal=DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
-            --from-literal=NEO4J_USERNAME=neo4j \
-            --from-literal=NEO4J_PASSWORD=${{ secrets.DB_PASSWORD }} \
-            --from-literal=JWT_SECRET=${{ secrets.JWT_SECRET }} \
-            --namespace ${{ env.K8S_NAMESPACE }} \
-            --dry-run=client -o yaml | kubectl apply -f -
+          aws secretsmanager put-secret-value \
+            --secret-id "circleguard/${{ env.K8S_NAMESPACE }}" \
+            --secret-string "{\"DB_USERNAME\":\"circleguard\",\"DB_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"NEO4J_USERNAME\":\"neo4j\",\"NEO4J_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"JWT_SECRET\":\"${{ secrets.JWT_SECRET }}\"}"
 
       - name: Helm lint
         run: |

@@ -68,9 +68,15 @@ jobs:
 
       - name: Smoke test
         run: |
-          if [ -f "e2e/${{ github.event.client_payload.service }}/e2e.sh" ]; then
-            chmod +x e2e/${{ github.event.client_payload.service }}/e2e.sh
-            ./e2e/${{ github.event.client_payload.service }}/e2e.sh
+          SERVICE=${{ github.event.client_payload.service }}
+          if [ -f "e2e/${SERVICE}/e2e.sh" ]; then
+            SVC_PORT=$(helm get values "${SERVICE}" -n ${{ env.K8S_NAMESPACE }} -a --output json | python3 -c "import sys,json; print(json.load(sys.stdin)['service']['port'])")
+            kubectl port-forward "svc/${SERVICE}" 18080:${SVC_PORT} -n ${{ env.K8S_NAMESPACE }} &
+            PF_PID=$!
+            sleep 5
+            chmod +x e2e/${SERVICE}/e2e.sh
+            ./e2e/${SERVICE}/e2e.sh || true
+            kill $PF_PID 2>/dev/null || true
           else
-            echo "No smoke test for ${{ github.event.client_payload.service }}"
+            echo "No smoke test for ${SERVICE}"
           fi

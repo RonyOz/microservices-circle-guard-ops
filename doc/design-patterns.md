@@ -375,6 +375,88 @@ Cada filtro tiene responsabilidad única:
 
 ---
 
+## Patrón 7 — Circuit Breaker
+
+**Categoría:** Resiliencia  
+**Dónde implementado:** `circleguard-auth-service` → `identity-service`, `circleguard-dashboard-service` → `promotion-service` (`microservices-circle-guard-dev`)
+
+### Definición
+
+Circuit Breaker envuelve llamadas a servicios remotos con un interruptor que tiene tres estados: CLOSED (tráfico normal), OPEN (falla detectada — bloquea llamadas y usa fallback), HALF_OPEN (prueba recuperación con tráfico limitado). Evita que fallos en cascada de un servicio agoten recursos en otros servicios.
+
+```
+CLOSED ──(50% fallos en 10 llamadas)──► OPEN ──(10s)──► HALF_OPEN
+  ▲                                                           │
+  └─────────────────(3 llamadas exitosas)─────────────────────┘
+```
+
+### Implementación en CircleGuard
+
+**Librería:** `io.github.resilience4j:resilience4j-spring-boot3:2.2.0` + `spring-boot-starter-aop`
+
+**auth-service → identity-service:**
+
+`IdentityClient` llama a `identity-service` para mapear identidades reales a UUIDs anónimos. Si `identity-service` está caído, el circuit breaker abre y retorna un UUID determinístico derivado de la identidad (fallback privacy-safe).
+
+```java
+// services/circleguard-auth-service/src/main/java/.../client/IdentityClient.java
+@CircuitBreaker(name = "identityService", fallbackMethod = "getAnonymousIdFallback")
+public UUID getAnonymousId(String realIdentity) {
+    // llamada HTTP a identity-service
+}
+
+public UUID getAnonymousIdFallback(String realIdentity, Exception ex) {
+    // UUID tipo 3 (MD5) — determinístico, sin red, sin exponer identidad real
+    return UUID.nameUUIDFromBytes(realIdentity.getBytes());
+}
+```
+
+**dashboard-service → promotion-service:**
+
+`PromotionClient` consulta estadísticas de salud del `promotion-service`. Si cae, el dashboard retorna un mapa de estado degradado en lugar de propagar un 500.
+
+```java
+// services/circleguard-dashboard-service/src/main/java/.../client/PromotionClient.java
+@CircuitBreaker(name = "promotionService", fallbackMethod = "getHealthStatsFallback")
+public Map<String, Object> getHealthStats() { ... }
+
+public Map<String, Object> getHealthStatsFallback(Exception ex) {
+    return Map.of("status", "unavailable", "timestamp", new Date());
+}
+```
+
+**Configuración (ambos servicios en `application.yml`):**
+
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      identityService:      # o promotionService
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50        # abre con 50% de fallos
+        wait-duration-in-open-state: 10s  # espera 10s antes de HALF_OPEN
+        permitted-number-of-calls-in-half-open-state: 3
+        sliding-window-type: COUNT_BASED
+```
+
+**Archivos relevantes:**
+- `services/circleguard-auth-service/src/main/java/.../client/IdentityClient.java`
+- `services/circleguard-auth-service/src/main/resources/application.yml`
+- `services/circleguard-auth-service/build.gradle.kts`
+- `services/circleguard-dashboard-service/src/main/java/.../client/PromotionClient.java`
+- `services/circleguard-dashboard-service/src/main/resources/application.yml`
+- `services/circleguard-dashboard-service/build.gradle.kts`
+
+### Beneficios
+
+- Fallos de `identity-service` no bloquean el flujo de autenticación — el sistema sigue operando con UUID de fallback
+- Fallos de `promotion-service` no propagan errores 500 al dashboard — el usuario ve estado "unavailable" en lugar de pantalla de error
+- El breaker en OPEN hace fail-fast: no espera timeout de red en cada llamada mientras el servicio está caído
+- Recuperación automática via HALF_OPEN — no requiere intervención manual para restablecer tráfico
+
+---
+
 ## Resumen
 
 | # | Patrón | Categoría | Dónde en CircleGuard |
@@ -385,3 +467,4 @@ Cada filtro tiene responsabilidad única:
 | 4 | External Configuration Store | Configuración | AWS SM + ESO + IRSA → K8s Secrets → Spring `envFrom` |
 | 5 | Gatekeeper | Seguridad | gateway-service: validación QR para acceso físico al campus |
 | 6 | Pipes and Filters | Procesamiento | CI/CD pipeline: test → build → push → deploy → verify → smoke |
+| 7 | Circuit Breaker | Resiliencia | auth-service→identity-service, dashboard-service→promotion-service |

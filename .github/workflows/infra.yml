@@ -49,7 +49,7 @@ jobs:
 
       - name: Terraform plan
         run: |
-          terraform plan -var-file=terraform.${{ github.event.inputs.environment }}.tfvars -out=tfplan
+          terraform plan -var-file=terraform.tfvars -out=tfplan
 
       - name: Terraform apply
         if: ${{ github.event.inputs.action == 'apply' }}
@@ -58,4 +58,4 @@ jobs:
       - name: Terraform destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         run: |
-          terraform destroy -var-file=terraform.${{ github.event.inputs.environment }}.tfvars -auto-approve
+          terraform destroy -var-file=terraform.tfvars -auto-approve

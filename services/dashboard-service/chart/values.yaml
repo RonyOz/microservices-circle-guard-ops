@@ -46,6 +46,7 @@ env:
   DB_HOST: "postgres"
   DB_NAME: "circleguard_dashboard"
   PROMOTION_SERVICE_URL: "http://promotion-service:8086"
+  FEATURE_KANONYMITY_ENABLED: "true"
 
 envFrom:
   - secretRef:

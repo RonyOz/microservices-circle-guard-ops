@@ -236,6 +236,37 @@ La configuración no-sensible (DB host, service URLs, puerto) también es extern
 - Audit trail en AWS CloudTrail de cada acceso a Secrets Manager
 - Un solo lugar para gestionar la configuración sensible de todos los servicios
 
+### Extensión — ConfigMaps para configuración no sensible
+
+Complementando la cadena de secretos, la configuración no-sensible (DB host, service URLs, feature flags) se externaliza vía **Kubernetes ConfigMaps** generados por los Helm charts:
+
+```yaml
+# services/auth-service/chart/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "chart.fullname" . }}-config
+data:
+  DB_HOST: "postgres"
+  DB_NAME: "circleguard_auth"
+  LDAP_HOST: "openldap"
+  IDENTITY_SERVICE_URL: "http://identity-service:8082"
+```
+
+El `deployment.yaml` referencia ambas fuentes (ConfigMap + Secret) vía `envFrom`:
+
+```yaml
+envFrom:
+  - configMapRef:
+      name: auth-service-config      # config no-sensible
+  - secretRef:
+      name: auth-service-secret      # secretos (DB_PASSWORD, JWT_SECRET)
+```
+
+**Servicios con ConfigMap wired:** auth-service, form-service, gateway-service, dashboard-service.
+
+**Ventaja clave:** un operador puede cambiar `DB_HOST` o `IDENTITY_SERVICE_URL` modificando el ConfigMap y ejecutando `kubectl rollout restart`, sin rebuild de imagen ni cambio de Helm values en git.
+
 ---
 
 ## Patrón 5 — Gatekeeper
@@ -457,6 +488,82 @@ resilience4j:
 
 ---
 
+## Patrón 8 — Feature Toggle
+
+**Categoría:** Extensibilidad / Control  
+**Dónde implementado:** `circleguard-dashboard-service` (`microservices-circle-guard-dev`)
+
+### Definición
+
+Feature Toggle (también llamado Feature Flag) es un patrón que permite activar o desactivar funcionalidades de una aplicación en runtime mediante configuración externa, sin necesidad de rebuild o redeploy del binario. Permite desacoplamiento entre deploy de código y activación de funcionalidades.
+
+```
+[Feature Flag: FEATURE_KANONYMITY_ENABLED=true]
+              |
+     [AnalyticsService]
+              |
+    +---------+---------+
+    |                   |
+[kAnonymityFilter.apply()]  [raw data]   ← toggle selects branch
+    |                   |
+[k-anonymized response]  [unfiltered response]
+```
+
+### Implementación en CircleGuard
+
+**Funcionalidad controlada:** El filtro de K-anonimato (k=5) en `dashboard-service`. Este filtro suprime estadísticas de grupos con menos de 5 individuos para prevenir re-identificación. El toggle permite deshabilitarlo para entornos de desarrollo o testing donde la privacidad no aplica.
+
+**Spring Boot (`AnalyticsService.java`):**
+
+```java
+@Value("${feature.k-anonymity.enabled:true}")
+private boolean kAnonymityEnabled;
+
+public Map<String, Object> getDepartmentStats(String department) {
+    Map<String, Object> raw = promotionClient.getHealthStatsByDepartment(department);
+    return kAnonymityEnabled ? kAnonymityFilter.apply(raw) : raw;
+}
+```
+
+**Configuración (`application.yml`):**
+
+```yaml
+feature:
+  k-anonymity:
+    enabled: ${FEATURE_KANONYMITY_ENABLED:true}
+```
+
+**Helm chart (`values.yaml`):**
+
+```yaml
+env:
+  FEATURE_KANONYMITY_ENABLED: "true"   # production: true; dev/testing: false
+```
+
+**Cambiar el toggle sin redeploy:**
+
+```bash
+# Deshabilitar k-anonimato en dev namespace (para testing)
+kubectl patch configmap dashboard-service-config -n dev \
+  --type merge -p '{"data":{"FEATURE_KANONYMITY_ENABLED":"false"}}'
+kubectl rollout restart deployment/dashboard-service -n dev
+```
+
+**Archivos relevantes:**
+- `services/circleguard-dashboard-service/src/main/java/.../service/AnalyticsService.java`
+- `services/circleguard-dashboard-service/src/main/resources/application.yml`
+- `services/dashboard-service/chart/values.yaml`
+- `services/dashboard-service/chart/templates/configmap.yaml`
+
+### Beneficios
+
+- Funcionalidad de privacidad configurable por ambiente: `true` en stage/production, `false` en dev para facilitar pruebas con datos reales
+- Zero downtime para activar/desactivar: solo patch ConfigMap + rollout restart
+- El valor default `true` garantiza que un deploy sin ConfigMap explícito es seguro (privacy-first)
+- Combinado con el patrón de External Configuration (Patrón 4), el toggle se propaga desde Helm values → ConfigMap → pod sin tocar código
+
+---
+
 ## Resumen
 
 | # | Patrón | Categoría | Dónde en CircleGuard |
@@ -464,7 +571,8 @@ resilience4j:
 | 1 | Bulkhead | Resiliencia | K8s namespaces dev/stage/production, Helm resource limits |
 | 2 | Publisher/Subscriber | Mensajería | Kafka: form→promotion, promotion→notification |
 | 3 | Cache Aside | Rendimiento | Redis: QR tokens (gateway), health status (promotion) |
-| 4 | External Configuration Store | Configuración | AWS SM + ESO + IRSA → K8s Secrets → Spring `envFrom` |
+| 4 | External Configuration Store | Configuración | AWS SM + ESO + IRSA → K8s ConfigMaps + Secrets → Spring `envFrom` |
 | 5 | Gatekeeper | Seguridad | gateway-service: validación QR para acceso físico al campus |
 | 6 | Pipes and Filters | Procesamiento | CI/CD pipeline: test → build → push → deploy → verify → smoke |
 | 7 | Circuit Breaker | Resiliencia | auth-service→identity-service, dashboard-service→promotion-service |
+| 8 | Feature Toggle | Extensibilidad | dashboard-service: K-anonimato habilitado/deshabilitado via ConfigMap |

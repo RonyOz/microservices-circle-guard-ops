@@ -58,3 +58,6 @@ externalSecrets:
     - gateway-service
     - dashboard-service
     - file-service
+
+rbac:
+  ghaRoleArn: ""  # set at deploy time: --set rbac.ghaRoleArn=arn:aws:iam::<account>:role/circleguard-gha-role

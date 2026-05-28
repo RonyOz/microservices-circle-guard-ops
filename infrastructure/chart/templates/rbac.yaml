@@ -1,0 +1,78 @@
+# Role: minimal read permissions for application pods
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: circleguard-service-role
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+# RoleBinding: all service SAs → service role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: circleguard-service-binding
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: circleguard-service-role
+subjects:
+  {{- range .Values.externalSecrets.services }}
+  - kind: ServiceAccount
+    name: {{ . }}
+    namespace: {{ $.Release.Namespace }}
+  {{- end }}
+---
+# ServiceAccount: represents GHA CI/CD deploy identity per namespace
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: circleguard-ci
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ .Values.rbac.ghaRoleArn }}
+---
+# Role: deploy permissions for CI operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: circleguard-deploy-role
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps", "pods"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+# RoleBinding: CI SA → deploy role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: circleguard-deploy-binding
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: circleguard-deploy-role
+subjects:
+  - kind: ServiceAccount
+    name: circleguard-ci
+    namespace: {{ .Release.Namespace }}

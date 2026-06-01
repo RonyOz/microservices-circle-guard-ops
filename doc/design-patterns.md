@@ -221,11 +221,11 @@ La configuración no-sensible (DB host, service URLs, puerto) también es extern
 3. `kubectl rollout restart deployment/<service>` para que los pods lean el nuevo Secret
 4. Cero rebuilding de imagen Docker
 
-**Archivos relevantes:**
-- `.github/workflows/bootstrap-eso.yml` — instala ESO + ClusterSecretStore + ExternalSecrets
-- `infrastructure/chart/templates/external-secrets.yaml` — ExternalSecret por servicio
-- `infrastructure/chart/templates/secret-store.yaml` — ClusterSecretStore (AWS SM provider)
-- `terraform/aws/modules/irsa-secrets/main.tf` — IAM role para ESO + SM secrets
+**Archivos relevantes (un dueño por recurso, sin solape):**
+- `.github/workflows/bootstrap-eso.yml` — (cluster, una vez) instala ESO + crea el ClusterSecretStore
+- `infrastructure/chart/templates/external-secrets.yaml` — (namespaced, vía deploy-data-plane.yml) ExternalSecret por servicio
+- `.github/workflows/deploy-{dev,stage,prod}.yml` — seed de AWS Secrets Manager por ambiente (`put-secret-value`)
+- `terraform/aws/modules/irsa-secrets/main.tf` — IAM role para ESO + contenedores de SM secrets
 - `services/<service>/chart/templates/deployment.yaml` — `envFrom.secretRef`
 - `docs/secrets-management.md` — documentación completa de la cadena
 

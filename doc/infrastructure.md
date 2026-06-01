@@ -26,7 +26,7 @@ El sistema vive en dos repositorios con responsabilidades separadas:
 | Repositorio | Rol |
 |-------------|-----|
 | `microservices-circle-guard-dev` | Código fuente Spring Boot (8 servicios) + Mobile (Expo/React Native) + GHA workflows por servicio (`_reusable-service-ci.yml`) |
-| `microservices-circle-guard-ops` | Terraform, Helm charts, GHA de deploy (`deploy-dev/stage/prod/infra.yml`), Locust, E2E scripts, Trivy/ZAP scans |
+| `microservices-circle-guard-ops` | Terraform, Helm charts, GHA (`provision-aws.yml`, `deploy-data-plane.yml`, `deploy-dev/stage/prod.yml`), Locust, E2E scripts, Trivy/ZAP scans |
 
 ---
 
@@ -103,13 +103,11 @@ PostgreSQL · Neo4j · Kafka · Zookeeper · Redis · OpenLDAP · MailHog
 
 ```
 terraform/aws/
-├── main.tf                    # Módulo raíz
+├── main.tf                    # Módulo raíz + bloque backend "s3" (remote state)
 ├── variables.tf
 ├── outputs.tf
-├── terraform.dev.tfvars
-├── terraform.stage.tfvars
-├── terraform.prod.tfvars
-├── backend.tf                 # S3 remote state
+├── terraform.tfvars           # Config única (cluster compartido)
+├── terraform.tfvars.example
 └── modules/
     ├── vpc/                   # VPC, subnets, IGW, NAT, route tables
     ├── eks-cluster/           # EKS control plane + managed node group + OIDC provider
@@ -118,17 +116,27 @@ terraform/aws/
     └── irsa-secrets/          # IAM role para ESO (IRSA) + Secrets Manager secrets
 ```
 
-### Workspace Pattern
+### Multi-environment: namespace-as-environment
 
-Cada ambiente mapea a un workspace Terraform:
+Por costo (presupuesto académico ~$100), **no** hay un cluster EKS por ambiente.
+Existe **un único cluster `circleguard-eks`** y los tres environments
+(`dev`, `stage`, `production`) son **namespaces de Kubernetes** dentro de él.
+
+Consecuencia para Terraform: una sola config (`terraform.tfvars`), un solo state,
+sin workspaces. La infra se aplica una vez; la separación por ambiente ocurre a
+nivel K8s (namespaces) y de despliegue (Helm release por namespace), no a nivel IaC.
 
 ```bash
-terraform workspace select dev        # o stage / production
-terraform plan -var-file=terraform.dev.tfvars -out=tfplan
+terraform plan -var-file=terraform.tfvars -out=tfplan
 terraform apply tfplan
 ```
 
-El workflow `infra.yml` (trigger manual) envuelve este proceso para uso en CI.
+El workflow `provision-aws.yml` (trigger manual, input `action`: plan/apply/destroy)
+envuelve este proceso para CI — provisiona solo el **control plane** (VPC/EKS/ECR/OIDC/IRSA).
+Los **backing services** (Postgres, Neo4j, Kafka, Redis, SMTP) son el **data plane** y se
+despliegan aparte con `deploy-data-plane.yml` (chart `circleguard-infra`, por namespace).
+Si en el futuro se quisiera un cluster por ambiente, habría que introducir `cluster_name`
+distinto por env + state aislado (workspaces o backends key separados) — descartado aquí por costo.
 
 ### Remote State
 
@@ -201,22 +209,23 @@ AWS Secrets Manager (DB_PASSWORD · JWT_SECRET · NEO4J_PASSWORD)
 
 ## Bootstrap Sequence
 
-Pasos a ejecutar **una vez** después de `terraform apply`, por ambiente:
+Pasos tras `terraform apply`. Los pasos 1-2 son **una vez por cluster**; el paso 3 es **por namespace**:
 
 ```bash
 # 1. Configurar kubectl
 aws eks update-kubeconfig --name circleguard-eks --region us-east-1
 
-# 2. Instalar External Secrets Operator (o correr bootstrap-eso.yml workflow)
+# 2. (UNA VEZ por cluster) ESO operator + ClusterSecretStore — correr bootstrap-eso.yml workflow.
+#    Equivalente manual:
 helm repo add external-secrets https://charts.external-secrets.io
 helm upgrade --install external-secrets external-secrets/external-secrets \
   --namespace external-secrets --create-namespace \
   --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=<ESO_ROLE_ARN>
+# + kubectl apply del ClusterSecretStore circleguard-secret-store (ver bootstrap-eso.yml)
 
-# 3. Crear ClusterSecretStore + ExternalSecrets (aplica automáticamente via bootstrap-eso.yml)
-
-# 4. Desplegar data plane por namespace
-helm upgrade --install infrastructure infrastructure/chart/ \
+# 3. (POR namespace) Data plane — correr deploy-data-plane.yml. El chart crea backing services
+#    + las ExternalSecrets namespaced. El seed de Secrets Manager lo hace deploy-dev/stage/prod.yml.
+helm upgrade --install circleguard-infra infrastructure/chart/ \
   --namespace dev --create-namespace \
   --set externalSecrets.smSecretPath=circleguard/dev
 

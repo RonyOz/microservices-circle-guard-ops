@@ -11,7 +11,10 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ESO_ROLE_ARN: arn:aws:iam::888900520630:role/circleguard-eso-role
+  # Account-agnostic: the ARN is built at runtime from the OIDC-assumed identity
+  # (see "Resolve ESO role ARN" step). Role name matches var.role_name in
+  # terraform/aws/modules/irsa-secrets — same pattern deploy-dev.yml uses for the registry.
+  ESO_ROLE_NAME: circleguard-eso-role
 
 permissions:
   id-token: write
@@ -33,6 +36,12 @@ jobs:
 
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name circleguard-eks --region ${{ env.AWS_REGION }}
+
+      - name: Resolve ESO role ARN
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ESO_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${ESO_ROLE_NAME}" >> "$GITHUB_ENV"
+          echo "Resolved ESO_ROLE_ARN for account ${ACCOUNT_ID}"
 
       - name: Install external-secrets-operator
         run: |

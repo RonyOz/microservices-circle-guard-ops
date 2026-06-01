@@ -13,39 +13,46 @@ Read both files before starting any task.
 
 ## This repo's role
 
-Service-agnostic CI/CD, infrastructure, and deployment config. The app code lives in `microservices-circle-guard-dev`. This repo is triggered by the dev repo passing `SERVICE` and `IMAGE_TAG` parameters.
+Service-agnostic CI/CD, infrastructure, and deployment config. The app code lives in `microservices-circle-guard-dev`. The dev repo triggers this repo via `repository_dispatch`, passing the service name and image tag.
+
+**Platform:** AWS (EKS/ECR/S3/IAM-OIDC) + GitHub Actions. One shared EKS cluster `circleguard-eks`; environments `dev`/`stage`/`production` are **Kubernetes namespaces**, not separate clusters. (The pre-pivot DigitalOcean + Jenkins stack has been removed — see `doc/taller2.md` for history.)
 
 ## Key files
 
 | Path | Purpose |
 |------|---------|
-| `jenkins/Jenkinsfile.dev` | Deploy to `dev` namespace (smoke test) |
-| `jenkins/Jenkinsfile.stage` | Deploy to `stage` (unit + integration + E2E + Locust) |
-| `jenkins/Jenkinsfile.prod` | Deploy to `production` (--atomic + release notes) |
-| `jenkins/Jenkinsfile.infra` | Manual: install shared infra (PG/Neo4j/Kafka/Redis) |
+| `terraform/aws/` | AWS IaC — single shared cluster, single state (modules: vpc, eks-cluster, ecr, github-oidc, irsa-secrets) |
+| `.github/workflows/provision-aws.yml` | Terraform plan/apply/destroy (control plane) |
+| `.github/workflows/bootstrap-eso.yml` | Install External Secrets Operator + ClusterSecretStore (once per cluster) |
+| `.github/workflows/deploy-data-plane.yml` | Deploy `circleguard-infra` chart (PG/Neo4j/Kafka/Redis/LDAP/SMTP) per namespace |
+| `.github/workflows/deploy-{dev,stage,prod}.yml` | Deploy application services per namespace |
 | `services/<name>/chart/` | Helm chart per microservice |
-| `infrastructure/` | Helm values for shared middleware |
-| `terraform/` | DigitalOcean IaC (DOKS + Jenkins Droplet + DOCR) |
+| `infrastructure/chart/` | `circleguard-infra` Helm chart (shared backing services + ExternalSecrets) |
 | `locust/<name>/locustfile.py` | Locust perf tests per service |
 | `e2e/<name>/e2e.sh` | E2E curl scripts per service |
 | `cliff.toml` | git-cliff config for release notes |
 
 ## Image naming convention
 
-All services use a single DOCR repo:
+All services use a single ECR repo; the service is encoded in the tag (account derived at runtime, never hardcoded):
 ```
-registry.digitalocean.com/circleguard/circleguard-services:<service>-sha-<commit7>
+<account>.dkr.ecr.<region>.amazonaws.com/circleguard:<service>-sha-<commit7>
 ```
 
-## Jenkins credentials required
+## Secrets
 
-`kubeconfig-doks`, `do-api-token`, `github-token`, `db-credentials`, `jwt-secret`
+- CI-time (ephemeral): **GitHub Actions Secrets** (`AWS_ROLE_ARN`, GitHub token).
+- Runtime (long-lived): **AWS Secrets Manager** read by pods via **External Secrets Operator** (IRSA).
+- ClusterSecretStore → `bootstrap-eso.yml`; ExternalSecret (per service) → `infrastructure/chart`.
 
-## Infra bootstrap (run once after terraform apply)
+## Bootstrap order (fresh cluster)
 
-```bash
-./scripts/bootstrap-cluster.sh circleguard-k8s circleguard
-./scripts/deploy-infrastructure.sh dev
-./scripts/deploy-infrastructure.sh stage
-./scripts/deploy-infrastructure.sh production
 ```
+1. terraform/aws/bootstrap/init-backend.sh   # once per account (S3 state bucket)
+2. provision-aws.yml      (apply)            # VPC → ECR → OIDC → EKS → IRSA
+3. bootstrap-eso.yml                         # External Secrets Operator + ClusterSecretStore
+4. deploy-data-plane.yml  (per namespace)    # backing services
+5. deploy-{dev,stage,prod}.yml               # application services
+```
+
+Local convenience wrappers: `scripts/deploy-infrastructure.sh <ns>`, `scripts/port-forward-dev.sh`.

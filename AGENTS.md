@@ -4,19 +4,19 @@ Para opencode. Ver contexto completo del workspace en `/home/ronyoz/dev/cg/AGENT
 
 ## Rol de este repo
 
-Repo service-agnostic con CI/CD, Helm charts, Terraform, Locust y E2E. El dev repo (`microservices-circle-guard-dev`) tiene el código fuente de los 8 microservicios.
+Repo service-agnostic con CI/CD, Helm charts, Terraform, Locust y E2E. El dev repo (`microservices-circle-guard-dev`) tiene el código fuente de los 8 microservicios. Plataforma: **AWS (EKS/ECR/S3/OIDC) + GitHub Actions** — un solo cluster EKS, ambientes = namespaces.
 
 ## Archivos clave
 
 | Ruta | Propósito |
 |------|-----------|
 | `services/<name>/chart/` | Helm chart por microservicio |
-| `terraform/` | DigitalOcean IaC (deprecated) + AWS IaC en `terraform/aws/` |
+| `terraform/aws/` | AWS IaC — un solo cluster EKS compartido (modules: vpc, eks-cluster, ecr, github-oidc, irsa-secrets) |
 | `locust/<name>/locustfile.py` | Tests de performance por servicio |
 | `e2e/<name>/e2e.sh` | E2E curl scripts por servicio |
 | `cliff.toml` | git-cliff config para release notes |
-| `infrastructure/` | Helm values para middleware compartido |
-| `.github/workflows/` | GitHub Actions workflows (nuevos, reemplazan Jenkinsfiles) |
+| `infrastructure/chart/` | Chart `circleguard-infra` — backing services + ExternalSecrets |
+| `.github/workflows/` | GitHub Actions: provision-aws, bootstrap-eso, deploy-data-plane, deploy-{dev,stage,prod} |
 
 ## Image naming
 

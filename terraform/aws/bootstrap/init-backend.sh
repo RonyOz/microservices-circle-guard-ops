@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Bootstrap script — creates S3 + DynamoDB backend resources.
+# Bootstrap script — creates the S3 backend bucket.
 # Run ONCE before `terraform init` in terraform/aws/.
-# These resources are managed outside Terraform to avoid bootstrap chicken-and-egg.
+# The bucket is managed outside Terraform to avoid the bootstrap chicken-and-egg.
+# Locking is S3-native (backend `use_lockfile = true`, Terraform >= 1.10) — no DynamoDB.
 set -euo pipefail
 
 BUCKET="circleguard-tfstate-1779832348"
-TABLE="circleguard-tflock"
 REGION="us-east-1"
 
 echo "==> Verifying S3 bucket: $BUCKET"
@@ -23,21 +23,6 @@ else
     --public-access-block-configuration \
     "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
   echo "    Created and hardened."
-fi
-
-echo "==> Verifying DynamoDB table: $TABLE"
-if aws dynamodb describe-table --table-name "$TABLE" --region "$REGION" &>/dev/null; then
-  echo "    Already exists — skipping."
-else
-  echo "    Creating..."
-  aws dynamodb create-table \
-    --table-name "$TABLE" \
-    --attribute-definitions AttributeName=LockID,AttributeType=S \
-    --key-schema AttributeName=LockID,KeyType=HASH \
-    --billing-mode PAY_PER_REQUEST \
-    --region "$REGION"
-  aws dynamodb wait table-exists --table-name "$TABLE" --region "$REGION"
-  echo "    Created."
 fi
 
 echo ""

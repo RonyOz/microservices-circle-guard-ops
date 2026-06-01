@@ -32,7 +32,11 @@ aws sts get-caller-identity
 | EKS cluster | `modules/eks-cluster/` |
 | ECR | `modules/ecr/` |
 | GitHub OIDC | `modules/github-oidc/` |
-| S3+DynamoDB backend | `modules/s3-backend/` |
+| IRSA / Secrets Manager | `modules/irsa-secrets/` |
+
+> **State backend** is not a module: the S3 bucket is created by `bootstrap/init-backend.sh`
+> (run once) and wired via the `backend "s3"` block in `main.tf`. Locking is S3-native
+> (`use_lockfile = true`, Terraform ≥ 1.10) — **no DynamoDB**.
 
 ## Region rationale
 

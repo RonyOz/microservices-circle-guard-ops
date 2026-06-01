@@ -10,7 +10,7 @@
   "modules": [
     { "id": "dev_repo", "label": "microservices-circle-guard-dev (App repo)" },
     { "id": "ops_repo", "label": "microservices-circle-guard-ops (Ops repo)" },
-    { "id": "aws_global", "label": "AWS account 354287460358 — Global services (us-east-1)" },
+    { "id": "aws_global", "label": "AWS account 888900520630 — Global services (us-east-1)" },
     { "id": "aws_vpc", "label": "AWS VPC circleguard-vpc (10.0.0.0/16) — us-east-1" },
     { "id": "azure_bonus", "label": "Azure (Bonus 1: Multi-Cloud)" }
   ],

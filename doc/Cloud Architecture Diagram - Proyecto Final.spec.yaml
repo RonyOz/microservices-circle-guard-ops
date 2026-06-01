@@ -20,7 +20,7 @@ modules:
       strokeColor: "#4D4D4D"
       dashed: 0
   - id: aws_global
-    label: "AWS account 354287460358 — Global services (us-east-1)"
+    label: "AWS account 888900520630 — Global services (us-east-1)"
     style:
       strokeColor: "#FF9900"
       dashed: 1

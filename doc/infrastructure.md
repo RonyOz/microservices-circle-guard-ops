@@ -33,7 +33,7 @@ El sistema vive en dos repositorios con responsabilidades separadas:
 ## AWS Resources
 
 ```
-AWS Account: 354287460358
+AWS Account: 888900520630   # current deploy — swappable, never hardcoded in TF/workflows
 Region: us-east-1
 ```
 
@@ -256,7 +256,7 @@ graph TB
         GHA_OPS["GHA\ndeploy-dev/stage/prod/infra.yml"]
     end
 
-    subgraph AWS_GLOBAL["AWS 354287460358 — us-east-1 (Global)"]
+    subgraph AWS_GLOBAL["AWS 888900520630 — us-east-1 (Global)"]
         ECR["ECR\ncircleguard (IMMUTABLE)"]
         OIDC["IAM OIDC\ncircleguard-gha-role"]
         S3["S3 circleguard-tfstate\n+ S3-native lock"]

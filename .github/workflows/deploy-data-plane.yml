@@ -4,12 +4,13 @@ name: Deploy data plane
 # rely on — PostgreSQL, Neo4j, Kafka + Zookeeper, Redis, OpenLDAP and the MailHog
 # SMTP catcher. Packaged as the `circleguard-infra` Helm chart (infrastructure/chart/).
 #
-# This is NOT the AWS control plane (VPC/EKS/ECR/OIDC) — that is provision-aws.yml.
+# This is NOT the AWS control plane (VPC/EKS/ECR/OIDC) — that is provisioned
+# LOCALLY by terraform/aws/bootstrap/bootstrap.sh (not in CI).
 # Order of operations for a fresh namespace:
-#   1. provision-aws.yml      (apply)   -> cluster exists
-#   2. bootstrap-eso.yml                -> external-secrets-operator + ClusterSecretStore
-#   3. deploy-data-plane.yml  (this)    -> backing services per namespace
-#   4. deploy-dev/stage/prod.yml        -> the application services
+#   0. bootstrap.sh           (local)   -> cluster + ECR + OIDC role exist
+#   1. bootstrap-eso.yml                -> external-secrets-operator + ClusterSecretStore
+#   2. deploy-data-plane.yml  (this)    -> backing services per namespace
+#   3. deploy-dev/stage/prod.yml        -> the application services
 
 on:
   workflow_dispatch:

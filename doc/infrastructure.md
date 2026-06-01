@@ -26,7 +26,7 @@ El sistema vive en dos repositorios con responsabilidades separadas:
 | Repositorio | Rol |
 |-------------|-----|
 | `microservices-circle-guard-dev` | Código fuente Spring Boot (8 servicios) + Mobile (Expo/React Native) + GHA workflows por servicio (`_reusable-service-ci.yml`) |
-| `microservices-circle-guard-ops` | Terraform, Helm charts, GHA (`provision-aws.yml`, `deploy-data-plane.yml`, `deploy-dev/stage/prod.yml`), Locust, E2E scripts, Trivy/ZAP scans |
+| `microservices-circle-guard-ops` | Terraform (provision local vía `bootstrap.sh`), Helm charts, GHA (`bootstrap-eso.yml`, `deploy-data-plane.yml`, `deploy-dev/stage/prod.yml`), Locust, E2E scripts, Trivy/ZAP scans |
 
 ---
 
@@ -131,12 +131,19 @@ terraform plan -var-file=terraform.tfvars -out=tfplan
 terraform apply tfplan
 ```
 
-El workflow `provision-aws.yml` (trigger manual, input `action`: plan/apply/destroy)
-envuelve este proceso para CI — provisiona solo el **control plane** (VPC/EKS/ECR/OIDC/IRSA).
+El **provisioning corre localmente** (`terraform/aws/bootstrap/bootstrap.sh`, creds admin),
+**no en CI** — decisión de seguridad: VPC/EKS/IAM es una operación rara y de alto privilegio.
+Darle permisos de crear/destruir infra a un rol OIDC asumible desde el repo (cualquier branch)
+sería un god-role: cualquier trigger del workflow podría nukear la cuenta (anti-patrón). Por eso
+el rol `circleguard-gha-role` queda **angosto** (ECR push + EKS deploy + SecretsManager seed sobre
+`circleguard/*`) y CI solo hace deploy. Si esto creciera a multi-dev/multi-cuenta, el siguiente
+paso sería un rol provisioner dedicado (asumible solo desde un environment protegido con approval),
+no ampliar el rol de deploy.
+
 Los **backing services** (Postgres, Neo4j, Kafka, Redis, SMTP) son el **data plane** y se
-despliegan aparte con `deploy-data-plane.yml` (chart `circleguard-infra`, por namespace).
+despliegan con `deploy-data-plane.yml` (chart `circleguard-infra`, por namespace).
 Si en el futuro se quisiera un cluster por ambiente, habría que introducir `cluster_name`
-distinto por env + state aislado (workspaces o backends key separados) — descartado aquí por costo.
+distinto por env + state aislado — descartado aquí por costo.
 
 ### Remote State
 

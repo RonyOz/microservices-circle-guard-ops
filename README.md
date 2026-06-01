@@ -1,4 +1,4 @@
-# 🛡️ circleguard-ops
+# circleguard-ops
 
 **Operations repository for CircleGuard** — Infrastructure as Code, Helm charts, CI/CD pipelines, and quality gates for the university contact-tracing platform.
 
@@ -6,7 +6,7 @@
 
 ---
 
-## ☁️ Platform
+## Platform
 
 | Concern | Technology |
 |:---|:---|
@@ -20,7 +20,7 @@
 
 ---
 
-## 🗂️ Repository structure
+## Repository structure
 
 ```
 circleguard-ops/
@@ -67,7 +67,7 @@ circleguard-ops/
 
 ---
 
-## 🔁 CI/CD flow
+## CI/CD flow
 
 ```
 dev repo push                          ops repo (this) — repository_dispatch
@@ -99,7 +99,7 @@ it is derived at runtime from the assumed OIDC role / `aws sts get-caller-identi
 
 ---
 
-## 🚀 Bootstrap a fresh cluster
+## Bootstrap a fresh cluster
 
 Prerequisites: `awscli` (authenticated), `terraform >= 1.10`, `kubectl`, `helm`.
 
@@ -127,7 +127,7 @@ Then, **once per cluster** and **once per namespace**:
 
 ---
 
-## 🔐 Secrets model
+## Secrets model
 
 - **CI-time** ephemeral values (kubeconfig context, GitHub token) → **GitHub Actions Secrets**.
 - **Runtime** long-lived values (DB passwords, JWT signing key) → **AWS Secrets Manager**,
@@ -138,7 +138,7 @@ Then, **once per cluster** and **once per namespace**:
 
 ---
 
-## 🌿 Branching strategy
+## Branching strategy
 
 **Trunk-Based Development.** PRs mandatory. Commits follow **Conventional Commits**
 (`feat`/`fix`/`chore`/`refactor`/`test`/`perf`) — git-cliff parses them for release notes.
@@ -151,7 +151,7 @@ Then, **once per cluster** and **once per namespace**:
 
 ---
 
-## 🧩 Design patterns
+## Design patterns
 
 - **Bulkhead** — `dev` / `stage` / `production` namespaces are isolated; a stage failure cannot reach production.
 - **Retry / atomic deploy** — `helm upgrade --atomic` (prod) auto-rolls back on failure; charts expose `/actuator/health/{liveness,readiness}` probes.
@@ -159,7 +159,7 @@ Then, **once per cluster** and **once per namespace**:
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 | Doc | Purpose |
 |:---|:---|

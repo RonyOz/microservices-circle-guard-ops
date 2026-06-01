@@ -131,8 +131,9 @@ terraform plan -var-file=terraform.tfvars -out=tfplan
 terraform apply tfplan
 ```
 
-El **provisioning corre localmente** (`terraform/aws/bootstrap/bootstrap.sh`, creds admin),
-**no en CI** — decisión de seguridad: VPC/EKS/IAM es una operación rara y de alto privilegio.
+El **provisioning corre localmente** (`terraform apply` con creds admin, tras crear el bucket
+de state con `scripts/init-s3-backend.sh`), **no en CI** — decisión de seguridad: VPC/EKS/IAM
+es una operación rara y de alto privilegio.
 Darle permisos de crear/destruir infra a un rol OIDC asumible desde el repo (cualquier branch)
 sería un god-role: cualquier trigger del workflow podría nukear la cuenta (anti-patrón). Por eso
 el rol `circleguard-gha-role` queda **angosto** (ECR push + EKS deploy + SecretsManager seed sobre

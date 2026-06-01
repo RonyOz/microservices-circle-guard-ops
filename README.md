@@ -30,7 +30,6 @@ circleguard-ops/
 │       ├── variables.tf
 │       ├── outputs.tf
 │       ├── terraform.tfvars.example    # Copy → terraform.tfvars (gitignored)
-│       ├── bootstrap/bootstrap.sh      # Run ONCE (local): S3 state bucket + OIDC/GHA role
 │       └── modules/
 │           ├── vpc/                     # VPC + public/private subnets (2 AZs) + NAT
 │           ├── eks-cluster/             # EKS control plane + node group + OIDC provider
@@ -50,7 +49,6 @@ circleguard-ops/
 │   └── templates/                      # deployment + service + probes
 │
 ├── .github/workflows/
-│   ├── provision-aws.yml              # Terraform plan/apply/destroy (control plane)
 │   ├── bootstrap-eso.yml              # Install External Secrets Operator + ClusterSecretStore
 │   ├── deploy-data-plane.yml          # Deploy circleguard-infra chart per namespace
 │   ├── deploy-dev.yml                 # helm lint → deploy → smoke test
@@ -60,6 +58,7 @@ circleguard-ops/
 ├── locust/<name>/locustfile.py        # Performance tests per service
 ├── e2e/<name>/e2e.sh                  # E2E curl scripts per service
 ├── scripts/
+│   ├── init-s3-backend.sh             # Run ONCE (local): create S3 tfstate bucket
 │   ├── deploy-infrastructure.sh       # Local wrapper for the data-plane chart
 │   └── port-forward-dev.sh            # Local port-forward helper
 └── cliff.toml                          # git-cliff config (release notes)
@@ -103,31 +102,41 @@ it is derived at runtime from the assumed OIDC role / `aws sts get-caller-identi
 
 Prerequisites: `awscli` (authenticated), `terraform >= 1.10`, `kubectl`, `helm`.
 
-**Step 0 — foundation (once per account, LOCAL, admin creds).** Breaks the
-chicken-and-egg: CI authenticates via the GHA OIDC role, which doesn't exist until
-this runs. `bootstrap.sh` creates the S3 state bucket **and** the identity layer
-(OIDC provider + GHA role, pulling in ECR), then prints the role ARN:
+**Step 0 — provision (LOCAL, admin creds).** Provisioning runs locally, **not in CI**
+(VPC/EKS/IAM = rare, high-privilege; the GHA OIDC role is deliberately narrow and cannot
+create infra — see [Why provisioning is local](#why-provisioning-is-local)). First create
+the S3 state bucket (the only piece that can't live in Terraform), then `terraform apply`
+provisions everything else (VPC/EKS/ECR/OIDC/IRSA + EKS access entry):
 
 ```bash
+./scripts/init-s3-backend.sh                   # S3 tfstate bucket (once per account)
 cd terraform/aws
 cp terraform.tfvars.example terraform.tfvars   # set gha_subject_patterns to your repo
-./bootstrap/bootstrap.sh
-# → copy the printed gha_role_arn into the AWS_ROLE_ARN secret (ops + dev repos)
+terraform init
+terraform apply -target=module.vpc             # network first
+terraform apply                                # the rest
+# → copy the gha_role_arn output into the AWS_ROLE_ARN secret (ops + dev repos)
 ```
 
-Everything after this runs **in CI via OIDC** — no more local Terraform:
+Everything after this runs **in CI via OIDC**:
 
 | Order | Step | Scope | How |
 |:---|:---|:---|:---|
-| 1 | Control plane: VPC + EKS + IRSA | once per cluster | `provision-aws.yml` (action=apply) |
-| 2 | External Secrets Operator + ClusterSecretStore | once per cluster | `bootstrap-eso.yml` |
-| 3 | Data plane (Postgres, Neo4j, Kafka, Redis, LDAP, SMTP) | per namespace | `deploy-data-plane.yml` |
-| 4 | Application services | per namespace | `deploy-{dev,stage,prod}.yml` |
+| 1 | External Secrets Operator + ClusterSecretStore | once per cluster | `bootstrap-eso.yml` |
+| 2 | Data plane (Postgres, Neo4j, Kafka, Redis, LDAP, SMTP) | per namespace | `deploy-data-plane.yml` |
+| 3 | Application services | per namespace | `deploy-{dev,stage,prod}.yml` |
 
-> **Teardown:** `provision-aws.yml` (action=destroy) removes **everything** Terraform
-> manages (VPC/EKS/ECR/OIDC/IRSA). The S3 state bucket survives (not Terraform-managed).
-> To re-provision afterwards, re-run `bootstrap.sh` locally first — it recreates the
-> GHA role CI logs in with (same step 0 as a fresh account).
+#### Why provisioning is local
+
+The OIDC role CI assumes (`circleguard-gha-role`) is scoped to **ECR push + EKS deploy +
+SecretsManager seed on `circleguard/*`** — it cannot touch VPC/EKS/IAM. Granting infra
+create/destroy to a role assumable from the repo on any branch would be a god-role: any
+workflow trigger could nuke the account. Provisioning is therefore a deliberate local op.
+
+> **Infra changes & teardown** are local too: `terraform apply` / `terraform destroy`
+> (`-var-file=terraform.tfvars`). `destroy` removes everything Terraform manages
+> (VPC/EKS/ECR/OIDC/IRSA); the S3 state bucket survives (not Terraform-managed), so a later
+> `terraform apply` re-provisions cleanly.
 
 ---
 

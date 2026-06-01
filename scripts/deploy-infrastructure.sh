@@ -6,7 +6,11 @@
 # crea o actualiza el release según corresponda.
 #
 # El chart vive en infrastructure/chart/ y referencia imágenes upstream
-# oficiales (sin Bitnami). Los secrets que consume los crea bootstrap-cluster.sh.
+# oficiales (sin Bitnami). Los secrets de runtime los inyecta External Secrets
+# Operator desde AWS Secrets Manager (ver bootstrap-eso.yml + deploy-data-plane.yml).
+#
+# Wrapper local de conveniencia; en CI el data plane se despliega vía
+# .github/workflows/deploy-data-plane.yml.
 
 set -euo pipefail
 

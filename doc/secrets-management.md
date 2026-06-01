@@ -81,7 +81,7 @@ Pods consume secrets via `envFrom.secretRef` in Helm chart `deployment.yaml`. On
 
 ## Shared infrastructure secrets (bootstrap)
 
-Created once per namespace by `scripts/bootstrap-cluster.sh`:
+Created per namespace when the `circleguard-infra` chart is deployed (`deploy-data-plane.yml`); runtime values are synced from AWS Secrets Manager via External Secrets Operator. _(Full secrets-matrix rewrite tracked in plan task 0.5.17.)_
 
 | K8s Secret | Keys | Default (dev/stage) |
 |------------|------|---------------------|

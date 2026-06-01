@@ -1,218 +1,173 @@
-# circleguard-ops
+# 🛡️ circleguard-ops
 
-Repositorio de operaciones para CircleGuard. Contiene la infraestructura como código (Terraform), los Helm charts de los microservicios y los pipelines de Jenkins para los tres ambientes del taller 2.
+**Operations repository for CircleGuard** — Infrastructure as Code, Helm charts, CI/CD pipelines, and quality gates for the university contact-tracing platform.
 
-![diagrama de arquitectura](doc/img/arquitectura.png)
+> Service-agnostic. The application code (8 Spring Boot microservices + Expo mobile) lives in [`microservices-circle-guard-dev`](../microservices-circle-guard-dev). The dev repo triggers this repo via `repository_dispatch`, passing the service name and image tag.
 
 ---
 
-## Estructura del repositorio
+## ☁️ Platform
+
+| Concern | Technology |
+|:---|:---|
+| **Primary cloud** | AWS — EKS (Kubernetes), ECR (images), S3 (Terraform state), IAM OIDC + IRSA (federation) |
+| **Secondary cloud** | Azure — AKS + ACR (Multi-Cloud bonus only) |
+| **CI/CD** | GitHub Actions with hosted runners + OIDC federation to AWS (no long-lived keys) |
+| **Secrets** | GitHub Actions Secrets (CI-time) + AWS Secrets Manager via External Secrets Operator (runtime) |
+| **Release notes** | git-cliff (conventional commits → GitHub Release) |
+
+> **One shared EKS cluster** (`circleguard-eks`). The three environments — `dev`, `stage`, `production` — are **Kubernetes namespaces**, not separate clusters (academic-budget decision). Environment isolation happens at the K8s + Helm layer, not at the IaC layer.
+
+---
+
+## 🗂️ Repository structure
 
 ```
 circleguard-ops/
 ├── terraform/
-│   ├── main.tf                        # Módulos: jenkins-vm + k8s-cluster
-│   ├── variables.tf
-│   ├── outputs.tf
-│   ├── terraform.tfvars.example       # Copiar → terraform.tfvars (no commitear)
-│   └── modules/
-│       ├── jenkins-vm/                # Droplet DO: Jenkins + Docker (encender/apagar)
-│       └── k8s-cluster/               # DOKS + DOCR + namespaces
+│   └── aws/                            # Control plane (single shared cluster, single state)
+│       ├── main.tf                     # Orchestrates the modules below
+│       ├── variables.tf
+│       ├── outputs.tf
+│       ├── terraform.tfvars.example    # Copy → terraform.tfvars (gitignored)
+│       ├── bootstrap/init-backend.sh   # Run ONCE: creates S3 state bucket (S3-native lock)
+│       └── modules/
+│           ├── vpc/                     # VPC + public/private subnets (2 AZs) + NAT
+│           ├── eks-cluster/             # EKS control plane + node group + OIDC provider
+│           ├── ecr/                     # Single ECR repo `circleguard` + lifecycle policy
+│           ├── github-oidc/             # IAM OIDC provider + role for GHA workflows
+│           └── irsa-secrets/            # IRSA role for External Secrets Operator
 │
 ├── infrastructure/
-│   ├── values-postgresql.yaml         # Bitnami PostgreSQL
-│   ├── values-kafka.yaml              # Bitnami Kafka (KRaft)
-│   ├── values-neo4j.yaml              # Neo4j
-│   └── values-redis.yaml              # Bitnami Redis
+│   └── chart/                          # `circleguard-infra` Helm chart (data plane)
+│       ├── Chart.yaml                  # Postgres, Neo4j, Kafka+Zookeeper, Redis,
+│       ├── values.yaml                 #   OpenLDAP, MailHog (SMTP catcher)
+│       └── templates/                  #   + ExternalSecret per service
 │
-├── {servicio}/chart/                  # Helm chart por microservicio
+├── services/<name>/chart/             # Helm chart per microservice (8 backend services)
 │   ├── Chart.yaml
-│   ├── values.yaml
-│   └── templates/
-│       ├── _helpers.tpl
-│       ├── deployment.yaml
-│       └── service.yaml
+│   ├── values.yaml                     # image.repository set at deploy time (--set)
+│   └── templates/                      # deployment + service + probes
 │
-├── jenkins/
-│   ├── Jenkinsfile.dev                # Deploy a namespace dev
-│   ├── Jenkinsfile.stage              # Deploy + tests completos a stage
-│   └── Jenkinsfile.prod               # Deploy + release notes a production
+├── .github/workflows/
+│   ├── provision-aws.yml              # Terraform plan/apply/destroy (control plane)
+│   ├── bootstrap-eso.yml              # Install External Secrets Operator + ClusterSecretStore
+│   ├── deploy-data-plane.yml          # Deploy circleguard-infra chart per namespace
+│   ├── deploy-dev.yml                 # helm lint → deploy → smoke test
+│   ├── deploy-stage.yml               # deploy → E2E → Locust
+│   └── deploy-prod.yml                # verify image → approval → --atomic → git-cliff release
 │
-├── locust/
-│   ├── auth-service/locustfile.py
-│   └── contact-tracing-service/locustfile.py
-│
+├── locust/<name>/locustfile.py        # Performance tests per service
+├── e2e/<name>/e2e.sh                  # E2E curl scripts per service
 ├── scripts/
-│   ├── bootstrap-cluster.sh           # Ejecutar UNA VEZ tras terraform apply
-│   ├── deploy-infrastructure.sh       # Instalar Kafka/PG/Neo4j/Redis en un namespace
-│   └── down-cluster.sh                # Puede limpiar volúmenes pvc-* huérfanos (opcional)
-│
-└── cliff.toml                         # Configuración git-cliff (release notes)
+│   ├── deploy-infrastructure.sh       # Local wrapper for the data-plane chart
+│   └── port-forward-dev.sh            # Local port-forward helper
+└── cliff.toml                          # git-cliff config (release notes)
 ```
 
 ---
 
-## Flujo CI/CD completo
+## 🔁 CI/CD flow
 
 ```
-app-repo (develop push)
-    │
-    ▼
-Jenkins webhook recibido
-    ├── Jenkinsfile.dev   → namespace dev   (deploy + smoke test)
-    └── Jenkinsfile.stage → namespace stage  (deploy + unit + integration + E2E + Locust)
+dev repo push                          ops repo (this) — repository_dispatch
+─────────────                          ──────────────────────────────────────
+push to dev branch   ─────────────►    deploy-dev.yml    → namespace dev
+                                          (helm lint → deploy → smoke)
 
-app-repo (main push)
-    │
-    ▼
-Jenkins webhook recibido
-    └── Jenkinsfile.prod  → namespace production (unit tests + deploy --atomic + release notes)
+push to release/*    ─────────────►    deploy-stage.yml  → namespace stage
+                                          (deploy → E2E → Locust)
+
+push to main         ─────────────►    deploy-prod.yml   → namespace production
+                                          (verify image → approval → --atomic → release)
 ```
 
-### Convención de imágenes (DOCR starter)
+The dev repo's reusable workflow tests → builds → pushes to ECR (via OIDC), then fires
+`peter-evans/repository-dispatch` with `client_payload` carrying the service, image tag,
+and registry URL. This repo's deploy workflows consume that payload.
 
-Para soportar el límite de **1 repositorio** del tier starter de DOCR, todos los servicios publican en:
+### Image naming
 
-`registry.digitalocean.com/circleguard/circleguard-services`
+All services share a single ECR repository; the microservice is encoded in the tag:
 
-La diferenciación por microservicio se hace en el tag:
+```
+<account>.dkr.ecr.<region>.amazonaws.com/circleguard:<service>-sha-<commit7>
+```
 
-`<service>-sha-<commit>`
-
-Ejemplo: `auth-service-sha-a1b2c3d`
+Example: `circleguard:auth-service-sha-a1b2c3d`. The account ID is never hardcoded —
+it is derived at runtime from the assumed OIDC role / `aws sts get-caller-identity`.
 
 ---
 
-## Primeros pasos
+## 🚀 Bootstrap a fresh cluster
 
-### 1. Requisitos locales
-
-```bash
-# Terraform >= 1.6
-brew install terraform
-
-# doctl (Digital Ocean CLI)
-brew install doctl
-doctl auth init   # pega tu DO API token
-
-# kubectl + helm
-brew install kubectl helm
-```
-
-### 2. Provisionar infraestructura
+Prerequisites: `awscli` (authenticated), `terraform >= 1.10`, `kubectl`, `helm`.
 
 ```bash
-cd terraform
+# 0. Create the S3 state backend (once per account)
+cd terraform/aws
+./bootstrap/init-backend.sh
+
+# 1. Provision the control plane (VPC → ECR → OIDC → EKS → IRSA)
 cp terraform.tfvars.example terraform.tfvars
-# Editar terraform.tfvars: do_token, ssh_key_ids, etc.
-
-# Crear SOLO el clúster K8s primero
 terraform init
-terraform apply -target=module.k8s_cluster
-
-# Crear la VM de Jenkins
-terraform apply -target=module.jenkins_vm
+terraform apply -target=module.vpc -target=module.ecr -target=module.github_oidc
+terraform apply -target=module.eks      # after VPC is up
+terraform apply                          # full apply (IRSA)
+#   …or run the provision-aws.yml workflow with action=apply
 ```
 
-### 3. Bootstrap del clúster (una sola vez)
+Then, **once per cluster** and **once per namespace**:
 
-```bash
-chmod +x scripts/bootstrap-cluster.sh
-./scripts/bootstrap-cluster.sh circleguard-k8s circleguard
-```
-
-Este script: obtiene el kubeconfig, crea los namespaces `dev`/`stage`/`production`, vincula DOCR al clúster y agrega los repos de Helm.
-
-### 4. Desplegar infraestructura compartida
-
-```bash
-chmod +x scripts/deploy-infrastructure.sh
-./scripts/deploy-infrastructure.sh dev
-./scripts/deploy-infrastructure.sh stage
-./scripts/deploy-infrastructure.sh production
-```
-
-Instala PostgreSQL, Neo4j, Kafka y Redis en cada namespace.
-
-> Los StatefulSets de Postgres/Neo4j usan `persistentVolumeClaimRetentionPolicy=Delete` y `storageClassName=do-block-storage` para evitar que PVC/PV queden huérfanos al desinstalar el chart.
-
-### Limpieza de volúmenes huérfanos al bajar el clúster
-
-```bash
-# Teardown normal (no borra volúmenes pvc-* automáticamente)
-./scripts/down-cluster.sh
-
-# Teardown + borrado de volúmenes pvc-* no adjuntos
-PRUNE_PVC_VOLUMES=true ./scripts/down-cluster.sh
-```
-
-### 5. Configurar Jenkins
-
-Acceder a `http://<jenkins_ip>:8080` (ver output de Terraform).
-
-Credenciales a crear en Jenkins → Manage → Credentials:
-
-| ID | Tipo | Descripción |
-|---|---|---|
-| `kubeconfig-doks` | Secret file | kubeconfig del clúster DOKS |
-| `do-api-token` | Secret text | DO API token |
-| `github-token` | Secret text | GitHub token (release notes) |
-
-Crear tres Pipeline jobs apuntando a este repo:
-- `circleguard-dev`   → `jenkins/Jenkinsfile.dev`
-- `circleguard-stage` → `jenkins/Jenkinsfile.stage`
-- `circleguard-prod`  → `jenkins/Jenkinsfile.prod`
-
-### 6. Gestión del ciclo de vida de la VM Jenkins
-
-```bash
-# Obtener el ID del Droplet
-terraform output  # muestra jenkins_ip, etc.
-doctl compute droplet list --format ID,Name,Status
-
-# Apagar cuando termines de trabajar
-doctl compute droplet-action power-off --droplet-id <ID> --wait
-
-# Encender cuando retomes
-doctl compute droplet-action power-on --droplet-id <ID> --wait
-
-# La IP puede cambiar al encender — revisar con:
-doctl compute droplet get <ID> --format PublicIPv4
-```
-
-> Si la IP cambia, actualizar el webhook en GitHub y la credencial `kubeconfig-doks` si el servidor de API del clúster es el mismo (DOKS mantiene IP fija).
+| Order | Step | Scope | How |
+|:---|:---|:---|:---|
+| 2 | External Secrets Operator + ClusterSecretStore | once per cluster | `bootstrap-eso.yml` |
+| 3 | Data plane (Postgres, Neo4j, Kafka, Redis, LDAP, SMTP) | per namespace | `deploy-data-plane.yml` |
+| 4 | Application services | per namespace | `deploy-{dev,stage,prod}.yml` |
 
 ---
 
-## Estrategia de branching — ops-repo
+## 🔐 Secrets model
 
-**Trunk-Based Development** (igual que en taller 1):
-
-| Tipo | Patrón | Vida máxima |
-|---|---|---|
-| Permanente | `main` | Indefinida |
-| Actualización | `update/<componente>` | 2 días |
-| Fix | `fix/<descripción>` | 2 días |
-
-Los PRs son obligatorios. El ambiente destino llega como parámetro del trigger desde app-repo.
+- **CI-time** ephemeral values (kubeconfig context, GitHub token) → **GitHub Actions Secrets**.
+- **Runtime** long-lived values (DB passwords, JWT signing key) → **AWS Secrets Manager**,
+  read by pods through **External Secrets Operator** via IRSA — no secrets baked into images.
+- The `ClusterSecretStore` (cluster-scoped) is created by `bootstrap-eso.yml`; each
+  `ExternalSecret` (namespaced) is created by the `circleguard-infra` chart. See
+  `doc/secrets-management.md`.
 
 ---
 
-## Patrones de diseño implementados
+## 🌿 Branching strategy
 
-**Bulkhead** — namespaces `dev`, `stage` y `production` completamente aislados. Un fallo en stage no afecta producción.
+**Trunk-Based Development.** PRs mandatory. Commits follow **Conventional Commits**
+(`feat`/`fix`/`chore`/`refactor`/`test`/`perf`) — git-cliff parses them for release notes.
 
-**Retry** — `helm upgrade --atomic` en Jenkinsfile.prod hace rollback automático si el deploy falla. Los Helm charts incluyen `livenessProbe` y `readinessProbe`.
-
-**Release notes automáticas** — `git-cliff` parsea conventional commits (`feat`/`fix`/`chore`) y genera el CHANGELOG + GitHub Release en cada deploy a producción.
+| Type | Pattern | Max lifetime |
+|:---|:---|:---|
+| Permanent | `main` | Indefinite |
+| Feature/update | `update/<component>` | 2 days |
+| Fix | `fix/<description>` | 2 days |
 
 ---
 
-## Costos estimados (Digital Ocean)
+## 🧩 Design patterns
 
-| Recurso | Tamaño | Costo |
-|---|---|---|
-| VM Jenkins | s-1vcpu-2gb | ~$0.018/hr (solo cuando está encendida) |
-| DOKS nodo | s-2vcpu-4gb | ~$24/mes |
-| DOCR | Free tier | $0 |
-| **Total activo** | | **~$24/mes + horas Jenkins** |
+- **Bulkhead** — `dev` / `stage` / `production` namespaces are isolated; a stage failure cannot reach production.
+- **Retry / atomic deploy** — `helm upgrade --atomic` (prod) auto-rolls back on failure; charts expose `/actuator/health/{liveness,readiness}` probes.
+- **Automated release notes** — git-cliff generates the CHANGELOG + GitHub Release on every production deploy.
+
+---
+
+## 📚 Documentation
+
+| Doc | Purpose |
+|:---|:---|
+| `terraform/aws/README.md` | AWS account, modules, state backend |
+| `doc/infrastructure.md` | Infra architecture + namespace-as-environment |
+| `doc/secrets-management.md` | Secrets matrix (ESO + Secrets Manager) |
+| `doc/design-patterns.md` | Resilience + deployment patterns |
+| `doc/branching-strategy.md` | Trunk-based workflow |
+| `doc/taller2.md` | Historical (pre-pivot DigitalOcean + Jenkins) — archive only |
+
+> Full workspace context: `/home/ronyoz/dev/cg/CLAUDE.md` · Completeness tracker: `PROJECT-FINAL-PLAN.md`.

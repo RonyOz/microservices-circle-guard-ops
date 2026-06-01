@@ -32,6 +32,12 @@ variable "node_max_count" {
   default = 4
 }
 
+variable "deploy_role_arn" {
+  description = "IAM role ARN (GHA OIDC role) granted ClusterAdmin via an EKS access entry, so CI deploy workflows can run kubectl/helm. Empty = no access entry."
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

@@ -30,7 +30,7 @@ circleguard-ops/
 │       ├── variables.tf
 │       ├── outputs.tf
 │       ├── terraform.tfvars.example    # Copy → terraform.tfvars (gitignored)
-│       ├── bootstrap/init-backend.sh   # Run ONCE: creates S3 state bucket (S3-native lock)
+│       ├── bootstrap/bootstrap.sh      # Run ONCE (local): S3 state bucket + OIDC/GHA role
 │       └── modules/
 │           ├── vpc/                     # VPC + public/private subnets (2 AZs) + NAT
 │           ├── eks-cluster/             # EKS control plane + node group + OIDC provider
@@ -103,27 +103,31 @@ it is derived at runtime from the assumed OIDC role / `aws sts get-caller-identi
 
 Prerequisites: `awscli` (authenticated), `terraform >= 1.10`, `kubectl`, `helm`.
 
-```bash
-# 0. Create the S3 state backend (once per account)
-cd terraform/aws
-./bootstrap/init-backend.sh
+**Step 0 — foundation (once per account, LOCAL, admin creds).** Breaks the
+chicken-and-egg: CI authenticates via the GHA OIDC role, which doesn't exist until
+this runs. `bootstrap.sh` creates the S3 state bucket **and** the identity layer
+(OIDC provider + GHA role, pulling in ECR), then prints the role ARN:
 
-# 1. Provision the control plane (VPC → ECR → OIDC → EKS → IRSA)
-cp terraform.tfvars.example terraform.tfvars
-terraform init
-terraform apply -target=module.vpc -target=module.ecr -target=module.github_oidc
-terraform apply -target=module.eks      # after VPC is up
-terraform apply                          # full apply (IRSA)
-#   …or run the provision-aws.yml workflow with action=apply
+```bash
+cd terraform/aws
+cp terraform.tfvars.example terraform.tfvars   # set gha_subject_patterns to your repo
+./bootstrap/bootstrap.sh
+# → copy the printed gha_role_arn into the AWS_ROLE_ARN secret (ops + dev repos)
 ```
 
-Then, **once per cluster** and **once per namespace**:
+Everything after this runs **in CI via OIDC** — no more local Terraform:
 
 | Order | Step | Scope | How |
 |:---|:---|:---|:---|
+| 1 | Control plane: VPC + EKS + IRSA | once per cluster | `provision-aws.yml` (action=apply) |
 | 2 | External Secrets Operator + ClusterSecretStore | once per cluster | `bootstrap-eso.yml` |
 | 3 | Data plane (Postgres, Neo4j, Kafka, Redis, LDAP, SMTP) | per namespace | `deploy-data-plane.yml` |
 | 4 | Application services | per namespace | `deploy-{dev,stage,prod}.yml` |
+
+> **Teardown:** `provision-aws.yml` (action=destroy) removes **everything** Terraform
+> manages (VPC/EKS/ECR/OIDC/IRSA). The S3 state bucket survives (not Terraform-managed).
+> To re-provision afterwards, re-run `bootstrap.sh` locally first — it recreates the
+> GHA role CI logs in with (same step 0 as a fresh account).
 
 ---
 

@@ -48,11 +48,14 @@ All services use a single ECR repo; the service is encoded in the tag (account d
 ## Bootstrap order (fresh cluster)
 
 ```
-1. terraform/aws/bootstrap/init-backend.sh   # once per account (S3 state bucket)
-2. provision-aws.yml      (apply)            # VPC → ECR → OIDC → EKS → IRSA
-3. bootstrap-eso.yml                         # External Secrets Operator + ClusterSecretStore
-4. deploy-data-plane.yml  (per namespace)    # backing services
-5. deploy-{dev,stage,prod}.yml               # application services
+0. terraform/aws/bootstrap/bootstrap.sh      # once per account, LOCAL: S3 bucket + OIDC provider + GHA role
+                                             #   → set printed gha_role_arn as AWS_ROLE_ARN secret
+1. provision-aws.yml      (apply)            # VPC + EKS + IRSA (in CI via OIDC)
+2. bootstrap-eso.yml                         # External Secrets Operator + ClusterSecretStore
+3. deploy-data-plane.yml  (per namespace)    # backing services
+4. deploy-{dev,stage,prod}.yml               # application services
 ```
+
+The bootstrap is LOCAL+admin to break the chicken-and-egg (CI auth needs the GHA role, which `bootstrap.sh` creates). `provision-aws.yml destroy` is a FULL teardown (incl. the GHA role); the S3 state bucket survives. Re-provisioning after a destroy = re-run `bootstrap.sh` locally (same step 0).
 
 Local convenience wrappers: `scripts/deploy-infrastructure.sh <ns>`, `scripts/port-forward-dev.sh`.

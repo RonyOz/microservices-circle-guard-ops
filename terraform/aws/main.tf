@@ -12,7 +12,7 @@ terraform {
     }
   }
 
-  # Backend pre-requisite: run bootstrap/bootstrap.sh once before terraform init.
+  # Backend pre-requisite: run scripts/init-s3-backend.sh once before terraform init.
   backend "s3" {
     bucket       = "circleguard-tfstate-1779832348"
     key          = "global/terraform.tfstate"

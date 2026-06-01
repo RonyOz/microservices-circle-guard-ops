@@ -14,7 +14,7 @@
 > Terraform and the workflows never hardcode it (provider derives it from your
 > credentials; the ESO ARN is built at runtime via `aws sts get-caller-identity`).
 > To deploy on a different account, just authenticate with it; you only need to
-> change the S3 backend bucket name (globally unique) in `main.tf` + `bootstrap/bootstrap.sh`.
+> change the S3 backend bucket name (globally unique) in `main.tf` + `scripts/init-s3-backend.sh`.
 
 ## Verify access
 
@@ -34,14 +34,14 @@ aws sts get-caller-identity
 | GitHub OIDC | `modules/github-oidc/` |
 | IRSA / Secrets Manager | `modules/irsa-secrets/` |
 
-> **State backend** is not a module: the S3 bucket is created by `bootstrap/bootstrap.sh`
+> **State backend** is not a module: the S3 bucket is created by `scripts/init-s3-backend.sh`
 > (run once, locally) and wired via the `backend "s3"` block in `main.tf`. Locking is
 > S3-native (`use_lockfile = true`, Terraform ≥ 1.10) — **no DynamoDB**.
 >
-> **Bootstrap (once per account, local, admin creds):** `bootstrap/bootstrap.sh` creates
-> the S3 bucket **and** the identity layer (`module.github_oidc` → OIDC provider + GHA
-> role, pulling in `module.ecr`), then prints the `gha_role_arn` to set as the
-> `AWS_ROLE_ARN` GitHub secret. Everything else (VPC/EKS/IRSA) runs in CI via OIDC.
+> **Bootstrap (once per account, local, admin creds):** run `scripts/init-s3-backend.sh`
+> (S3 bucket), then `terraform apply` here — it provisions VPC/EKS/ECR/OIDC/IRSA and the
+> EKS access entry. Set the `gha_role_arn` output as the `AWS_ROLE_ARN` GitHub secret.
+> Provisioning runs locally (admin), NOT in CI — the GHA OIDC role is narrow by design.
 
 ## Region rationale
 

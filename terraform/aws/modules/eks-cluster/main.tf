@@ -70,7 +70,7 @@ resource "aws_eks_cluster" "this" {
 
   # Access Entries API is how IAM principals get Kubernetes RBAC identities.
   # bootstrap_cluster_creator_admin_permissions keeps the local admin that runs
-  # bootstrap.sh as cluster-admin (so local kubectl works without extra wiring).
+  # `terraform apply` as cluster-admin (so local kubectl works without extra wiring).
   access_config {
     authentication_mode                         = "API_AND_CONFIG_MAP"
     bootstrap_cluster_creator_admin_permissions = true

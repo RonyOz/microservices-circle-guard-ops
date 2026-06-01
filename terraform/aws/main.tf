@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.10"  # use_lockfile (S3-native state locking) requires >= 1.10
+  required_version = ">= 1.10" # use_lockfile (S3-native state locking) requires >= 1.10
 
   required_providers {
     aws = {
@@ -18,7 +18,7 @@ terraform {
     key          = "global/terraform.tfstate"
     region       = "us-east-1"
     encrypt      = true
-    use_lockfile = true  # Terraform >= 1.10 S3-native locking (no DynamoDB required)
+    use_lockfile = true # Terraform >= 1.10 S3-native locking (no DynamoDB required)
   }
 }
 
@@ -86,6 +86,7 @@ module "eks" {
   node_desired_count  = var.node_desired_count
   node_min_count      = var.node_min_count
   node_max_count      = var.node_max_count
+  deploy_role_arn     = module.github_oidc.role_arn # EKS access entry for CI deploys
   tags                = local.common_tags
 }
 

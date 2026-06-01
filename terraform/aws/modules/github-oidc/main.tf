@@ -10,8 +10,8 @@ terraform {
 # ── OIDC provider for GitHub Actions ─────────────────────────────────────────
 
 resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
   # GitHub's OIDC thumbprint — stable, rotated by GitHub with 6-month notice
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
   tags            = var.tags
@@ -100,6 +100,28 @@ resource "aws_iam_policy" "eks_deploy" {
   })
 }
 
+# ── Secrets Manager policy (deploy workflows seed runtime secrets) ─────────────
+# deploy-{dev,stage,prod}.yml push current GHA secret values into the
+# circleguard/<env> secrets (created by module.irsa-secrets) before each deploy.
+# Scoped to the circleguard/* name prefix — NOT account-wide secret access.
+
+resource "aws_iam_policy" "secrets_seed" {
+  name = "${var.role_name}-secrets-seed"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret",
+      ]
+      Resource = "arn:aws:secretsmanager:*:*:secret:circleguard/*"
+    }]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "ecr_push" {
   role       = aws_iam_role.gha.name
   policy_arn = aws_iam_policy.ecr_push.arn
@@ -108,4 +130,9 @@ resource "aws_iam_role_policy_attachment" "ecr_push" {
 resource "aws_iam_role_policy_attachment" "eks_deploy" {
   role       = aws_iam_role.gha.name
   policy_arn = aws_iam_policy.eks_deploy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "secrets_seed" {
+  role       = aws_iam_role.gha.name
+  policy_arn = aws_iam_policy.secrets_seed.arn
 }

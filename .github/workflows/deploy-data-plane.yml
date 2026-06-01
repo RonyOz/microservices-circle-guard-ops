@@ -5,12 +5,13 @@ name: Deploy data plane
 # SMTP catcher. Packaged as the `circleguard-infra` Helm chart (infrastructure/chart/).
 #
 # This is NOT the AWS control plane (VPC/EKS/ECR/OIDC) — that is provisioned
-# LOCALLY by terraform/aws/bootstrap/bootstrap.sh (not in CI).
+# LOCALLY with `terraform apply` (not in CI).
 # Order of operations for a fresh namespace:
-#   0. bootstrap.sh           (local)   -> cluster + ECR + OIDC role exist
-#   1. bootstrap-eso.yml                -> external-secrets-operator + ClusterSecretStore
-#   2. deploy-data-plane.yml  (this)    -> backing services per namespace
-#   3. deploy-dev/stage/prod.yml        -> the application services
+#   0. scripts/init-s3-backend.sh  (local)  -> S3 state bucket
+#   1. terraform apply             (local)  -> cluster + ECR + OIDC role + access entry
+#   2. bootstrap-eso.yml                    -> external-secrets-operator + ClusterSecretStore
+#   3. deploy-data-plane.yml  (this)        -> backing services per namespace
+#   4. deploy-dev/stage/prod.yml            -> the application services
 
 on:
   workflow_dispatch:

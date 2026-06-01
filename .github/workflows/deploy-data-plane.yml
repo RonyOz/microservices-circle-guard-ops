@@ -1,0 +1,84 @@
+name: Deploy data plane
+
+# DATA PLANE: backing services + third-party dependencies that the microservices
+# rely on — PostgreSQL, Neo4j, Kafka + Zookeeper, Redis, OpenLDAP and the MailHog
+# SMTP catcher. Packaged as the `circleguard-infra` Helm chart (infrastructure/chart/).
+#
+# This is NOT the AWS control plane (VPC/EKS/ECR/OIDC) — that is provision-aws.yml.
+# Order of operations for a fresh namespace:
+#   1. provision-aws.yml      (apply)   -> cluster exists
+#   2. bootstrap-eso.yml                -> external-secrets-operator + ClusterSecretStore
+#   3. deploy-data-plane.yml  (this)    -> backing services per namespace
+#   4. deploy-dev/stage/prod.yml        -> the application services
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target namespace
+        type: choice
+        options: [dev, stage, production]
+        default: dev
+      action:
+        description: Action to perform
+        type: choice
+        options: [deploy, uninstall]
+        default: deploy
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER_NAME: circleguard-eks
+  RELEASE_NAME: circleguard-infra
+  CHART_DIR: infrastructure/chart
+  GHA_ROLE_NAME: circleguard-gha-role
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  data-plane:
+    runs-on: ubuntu-latest
+    env:
+      NAMESPACE: ${{ github.event.inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Resolve GHA role ARN
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "GHA_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${GHA_ROLE_NAME}" >> "$GITHUB_ENV"
+
+      - name: Helm lint
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: helm lint "${CHART_DIR}"
+
+      - name: Deploy data plane to ${{ env.NAMESPACE }}
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: |
+          helm upgrade --install "${RELEASE_NAME}" "${CHART_DIR}" \
+            --namespace "${NAMESPACE}" \
+            --create-namespace \
+            --set externalSecrets.smSecretPath=circleguard/${NAMESPACE} \
+            --set rbac.ghaRoleArn=${{ env.GHA_ROLE_ARN }} \
+            --wait --timeout 10m
+
+      - name: Verify data plane
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: |
+          helm status "${RELEASE_NAME}" -n "${NAMESPACE}"
+          kubectl get pods -n "${NAMESPACE}"
+
+      - name: Uninstall data plane from ${{ env.NAMESPACE }}
+        if: ${{ github.event.inputs.action == 'uninstall' }}
+        run: |
+          helm uninstall "${RELEASE_NAME}" -n "${NAMESPACE}"

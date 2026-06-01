@@ -1,13 +1,18 @@
 name: Bootstrap ESO
 
+# CLUSTER-LEVEL, run ONCE per cluster. Sets up the external-secrets plumbing that
+# is shared by every namespace:
+#   - external-secrets-operator (Helm, namespace external-secrets)
+#   - ClusterSecretStore "circleguard-secret-store" (cluster-scoped singleton)
+#
+# It deliberately does NOT touch any application namespace:
+#   - Per-service ExternalSecrets are created by the data plane (chart circleguard-infra,
+#     template external-secrets.yaml) via deploy-data-plane.yml — they are namespaced.
+#   - Secrets Manager seeding is done per environment by deploy-dev/stage/prod.yml.
+# Keeping those out of here avoids dual ownership of the same resources.
+
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: Target namespace
-        type: choice
-        options: [dev, stage, production]
-        default: dev
 
 env:
   AWS_REGION: us-east-1
@@ -23,8 +28,6 @@ permissions:
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
-    env:
-      ENVIRONMENT: ${{ github.event.inputs.environment }}
     steps:
       - uses: actions/checkout@v4
 
@@ -72,44 +75,6 @@ jobs:
                       namespace: external-secrets
           EOF
 
-      - name: Seed Secrets Manager secret
+      - name: Verify ClusterSecretStore
         run: |
-          SECRET_NAME="circleguard/${ENVIRONMENT}"
-          CURRENT=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text 2>/dev/null || echo "")
-          if [ -z "$CURRENT" ] || [ "$CURRENT" = "null" ]; then
-            aws secretsmanager put-secret-value \
-              --secret-id "$SECRET_NAME" \
-              --secret-string "{\"DB_USERNAME\":\"circleguard\",\"DB_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"NEO4J_USERNAME\":\"neo4j\",\"NEO4J_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"JWT_SECRET\":\"${{ secrets.JWT_SECRET }}\"}"
-            echo "Seeded SM secret $SECRET_NAME"
-          else
-            echo "SM secret $SECRET_NAME already has a value — skipping seed"
-          fi
-
-      - name: Create ExternalSecrets
-        run: |
-          NS="${ENVIRONMENT}"
-          for SVC in auth-service identity-service promotion-service notification-service form-service gateway-service dashboard-service file-service; do
-            kubectl apply -f - <<EOF
-          apiVersion: external-secrets.io/v1
-          kind: ExternalSecret
-          metadata:
-            name: ${SVC}-external-secret
-            namespace: ${NS}
-          spec:
-            refreshInterval: 1h
-            secretStoreRef:
-              name: circleguard-secret-store
-              kind: ClusterSecretStore
-            target:
-              name: ${SVC}-secret
-              creationPolicy: Owner
-            dataFrom:
-              - extract:
-                  key: circleguard/${NS}
-          EOF
-          done
-
-      - name: Verify sync
-        run: |
-          sleep 15
-          kubectl get externalsecret -n ${{ env.ENVIRONMENT }}
+          kubectl get clustersecretstore circleguard-secret-store -o wide

@@ -45,9 +45,12 @@ mailhog:
   image: mailhog/mailhog
   tag: v1.0.1
 
+# This chart only creates the namespaced ExternalSecret objects (templates/external-secrets.yaml).
+# The cluster-scoped ClusterSecretStore referenced below is created once by bootstrap-eso.yml
+# (run before this chart) — NOT here, to avoid two owners of a single cluster-wide resource.
 externalSecrets:
   enabled: true
-  secretStoreName: circleguard-secret-store
+  secretStoreName: circleguard-secret-store  # must match the store created by bootstrap-eso.yml
   smSecretPath: ""  # set at deploy time: --set externalSecrets.smSecretPath=circleguard/<namespace>
   services:
     - auth-service

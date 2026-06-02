@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.10" # use_lockfile (S3-native state locking) requires >= 1.10
+  required_version = ">= 1.10"
 
   required_providers {
     aws = {
@@ -12,13 +12,12 @@ terraform {
     }
   }
 
-  # Backend pre-requisite: run scripts/init-s3-backend.sh once before terraform init.
+  # bucket supplied via -backend-config at init
   backend "s3" {
-    bucket       = "circleguard-tfstate-1779832348"
     key          = "global/terraform.tfstate"
     region       = "us-east-1"
     encrypt      = true
-    use_lockfile = true # Terraform >= 1.10 S3-native locking (no DynamoDB required)
+    use_lockfile = true
   }
 }
 

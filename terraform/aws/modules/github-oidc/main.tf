@@ -101,9 +101,6 @@ resource "aws_iam_policy" "eks_deploy" {
 }
 
 # ── Secrets Manager policy (deploy workflows seed runtime secrets) ─────────────
-# deploy-{dev,stage,prod}.yml push current GHA secret values into the
-# circleguard/<env> secrets (created by module.irsa-secrets) before each deploy.
-# Scoped to the circleguard/* name prefix — NOT account-wide secret access.
 
 resource "aws_iam_policy" "secrets_seed" {
   name = "${var.role_name}-secrets-seed"

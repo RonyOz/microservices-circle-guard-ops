@@ -68,9 +68,6 @@ resource "aws_eks_cluster" "this" {
   role_arn = aws_iam_role.cluster.arn
   version  = var.kubernetes_version
 
-  # Access Entries API is how IAM principals get Kubernetes RBAC identities.
-  # bootstrap_cluster_creator_admin_permissions keeps the local admin that runs
-  # `terraform apply` as cluster-admin (so local kubectl works without extra wiring).
   access_config {
     authentication_mode                         = "API_AND_CONFIG_MAP"
     bootstrap_cluster_creator_admin_permissions = true
@@ -87,13 +84,9 @@ resource "aws_eks_cluster" "this" {
 }
 
 # ── Access entry: GitHub Actions deploy role → Kubernetes RBAC ─────────────────
-# The gha role authenticates to AWS via OIDC, but kubectl/helm talk to the K8s
-# API server, which needs this explicit IAM→RBAC binding. Without it, deploy-*
-# and bootstrap-eso fail with Unauthorized. ClusterAdmin scope: bootstrap-eso
-# creates cluster-scoped CRDs (ClusterSecretStore) that namespaced admin can't.
 
 resource "aws_eks_access_entry" "deploy_role" {
-  count         = var.deploy_role_arn == "" ? 0 : 1
+  count         = var.enable_deploy_access ? 1 : 0
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = var.deploy_role_arn
   type          = "STANDARD"
@@ -101,7 +94,7 @@ resource "aws_eks_access_entry" "deploy_role" {
 }
 
 resource "aws_eks_access_policy_association" "deploy_role_admin" {
-  count         = var.deploy_role_arn == "" ? 0 : 1
+  count         = var.enable_deploy_access ? 1 : 0
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = var.deploy_role_arn
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"

@@ -33,9 +33,15 @@ variable "node_max_count" {
 }
 
 variable "deploy_role_arn" {
-  description = "IAM role ARN (GHA OIDC role) granted ClusterAdmin via an EKS access entry, so CI deploy workflows can run kubectl/helm. Empty = no access entry."
+  description = "IAM role ARN (GHA OIDC role) granted ClusterAdmin via an EKS access entry, so CI deploy workflows can run kubectl/helm."
   type        = string
   default     = ""
+}
+
+variable "enable_deploy_access" {
+  description = "Create the EKS access entry binding deploy_role_arn to ClusterAdmin RBAC."
+  type        = bool
+  default     = true
 }
 
 variable "tags" {

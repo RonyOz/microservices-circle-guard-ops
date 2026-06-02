@@ -21,8 +21,9 @@ Service-agnostic CI/CD, infrastructure, and deployment config. The app code live
 
 | Path | Purpose |
 |------|---------|
-| `terraform/aws/` | AWS IaC — single shared cluster, single state (modules: vpc, eks-cluster, ecr, github-oidc, irsa-secrets) |
-| `scripts/init-s3-backend.sh` | **Local**, once: creates the S3 state bucket (only thing that can't live in TF). Provisioning itself = `terraform apply`, run locally — NOT in CI |
+| `terraform/aws/` | AWS IaC — single shared cluster, single S3-backed state (modules: vpc, eks-cluster, ecr, github-oidc, irsa-secrets) |
+| `scripts/init-s3-backend.sh` | **Local**, once: creates the S3 state bucket (only thing that can't live in TF) |
+| `scripts/aws-up.sh` / `scripts/aws-down.sh` | **Local**: `terraform apply` / `destroy` wrappers. Provisioning runs locally — NOT in CI |
 | `.github/workflows/bootstrap-eso.yml` | Install External Secrets Operator + ClusterSecretStore (once per cluster) |
 | `.github/workflows/deploy-data-plane.yml` | Deploy `circleguard-infra` chart (PG/Neo4j/Kafka/Redis/LDAP/SMTP) per namespace |
 | `.github/workflows/deploy-{dev,stage,prod}.yml` | Deploy application services per namespace |
@@ -49,13 +50,13 @@ All services use a single ECR repo; the service is encoded in the tag (account d
 
 ```
 0a. scripts/init-s3-backend.sh               # LOCAL, admin, once: create S3 state bucket
-0b. cd terraform/aws && terraform apply       # LOCAL, admin: VPC/EKS(+access entry)/ECR/OIDC/IRSA
+0b. scripts/aws-up.sh                         # LOCAL, admin: VPC/EKS(+access entry)/ECR/OIDC/IRSA
                                              #   → set gha_role_arn output as AWS_ROLE_ARN secret
 1. bootstrap-eso.yml                         # External Secrets Operator + ClusterSecretStore
 2. deploy-data-plane.yml  (per namespace)    # backing services
 3. deploy-{dev,stage,prod}.yml               # application services
 ```
 
-**Provisioning runs LOCALLY, not in CI** (deliberate: VPC/EKS/IAM = rare, high-privilege). The GHA OIDC role (`circleguard-gha-role`) is narrow on purpose — ECR push + EKS deploy + SecretsManager seed on `circleguard/*` — it **cannot create or destroy infrastructure**. Infra changes/teardown are local `terraform apply`/`destroy`; the S3 state bucket is not Terraform-managed so it survives a destroy. Rationale in `doc/infrastructure.md`.
+**Provisioning runs LOCALLY, not in CI** (deliberate: VPC/EKS/IAM = rare, high-privilege). The GHA OIDC role (`circleguard-gha-role`) is narrow on purpose — ECR push + EKS deploy + SecretsManager seed on `circleguard/*` — it **cannot create or destroy infrastructure**. Infra changes/teardown are local `terraform apply`/`destroy` (`scripts/aws-up.sh` / `scripts/aws-down.sh`); the S3 state bucket is not Terraform-managed so it survives a destroy. Rationale in `doc/infrastructure.md`.
 
 Local convenience wrappers: `scripts/deploy-infrastructure.sh <ns>`, `scripts/port-forward-dev.sh`.

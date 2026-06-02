@@ -16,7 +16,7 @@ Repo service-agnostic con CI/CD, Helm charts, Terraform, Locust y E2E. El dev re
 | `e2e/<name>/e2e.sh` | E2E curl scripts por servicio |
 | `cliff.toml` | git-cliff config para release notes |
 | `infrastructure/chart/` | Chart `circleguard-infra` — backing services + ExternalSecrets |
-| `.github/workflows/` | GitHub Actions: bootstrap-eso, deploy-data-plane, deploy-{dev,stage,prod} (provisioning NO está en CI — corre local vía `terraform/aws/bootstrap/bootstrap.sh`) |
+| `.github/workflows/` | GitHub Actions: bootstrap-eso, deploy-data-plane, deploy-{dev,stage,prod} (provisioning NO está en CI — corre local vía `scripts/init-s3-backend.sh` + `scripts/aws-up.sh`) |
 
 ## Image naming
 

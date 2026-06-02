@@ -59,6 +59,8 @@ circleguard-ops/
 ├── e2e/<name>/e2e.sh                  # E2E curl scripts per service
 ├── scripts/
 │   ├── init-s3-backend.sh             # Run ONCE (local): create S3 tfstate bucket
+│   ├── aws-up.sh                      # Local: terraform apply (provision infra)
+│   ├── aws-down.sh                    # Local: drain LB Services + terraform destroy
 │   ├── deploy-infrastructure.sh       # Local wrapper for the data-plane chart
 │   └── port-forward-dev.sh            # Local port-forward helper
 └── cliff.toml                          # git-cliff config (release notes)
@@ -105,16 +107,15 @@ Prerequisites: `awscli` (authenticated), `terraform >= 1.10`, `kubectl`, `helm`.
 **Step 0 — provision (LOCAL, admin creds).** Provisioning runs locally, **not in CI**
 (VPC/EKS/IAM = rare, high-privilege; the GHA OIDC role is deliberately narrow and cannot
 create infra — see [Why provisioning is local](#why-provisioning-is-local)). First create
-the S3 state bucket (the only piece that can't live in Terraform), then `terraform apply`
+the S3 state bucket (the only piece that can't live in Terraform), then `aws-up.sh`
 provisions everything else (VPC/EKS/ECR/OIDC/IRSA + EKS access entry):
 
 ```bash
 ./scripts/init-s3-backend.sh                   # S3 tfstate bucket (once per account)
 cd terraform/aws
 cp terraform.tfvars.example terraform.tfvars   # set gha_subject_patterns to your repo
-terraform init
-terraform apply -target=module.vpc             # network first
-terraform apply                                # the rest
+cd -
+./scripts/aws-up.sh
 # → copy the gha_role_arn output into the AWS_ROLE_ARN secret (ops + dev repos)
 ```
 
@@ -133,10 +134,10 @@ SecretsManager seed on `circleguard/*`** — it cannot touch VPC/EKS/IAM. Granti
 create/destroy to a role assumable from the repo on any branch would be a god-role: any
 workflow trigger could nuke the account. Provisioning is therefore a deliberate local op.
 
-> **Infra changes & teardown** are local too: `terraform apply` / `terraform destroy`
-> (`-var-file=terraform.tfvars`). `destroy` removes everything Terraform manages
-> (VPC/EKS/ECR/OIDC/IRSA); the S3 state bucket survives (not Terraform-managed), so a later
-> `terraform apply` re-provisions cleanly.
+> **Infra changes & teardown** are local too: `./scripts/aws-up.sh` / `./scripts/aws-down.sh`
+> (wrapping `terraform apply` / `terraform destroy`). `destroy` removes everything Terraform
+> manages (VPC/EKS/ECR/OIDC/IRSA); the S3 state bucket survives (not Terraform-managed), so a
+> later provision re-uses it cleanly.
 
 ---
 

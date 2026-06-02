@@ -13,6 +13,9 @@ data:
       scrape_interval: 30s
       evaluation_interval: 30s
 
+    rule_files:
+      - /etc/prometheus/rules.yml
+
     scrape_configs:
       - job_name: 'kubernetes-pods'
         kubernetes_sd_configs:
@@ -36,6 +39,58 @@ data:
             target_label: app
           - source_labels: [__meta_kubernetes_namespace]
             target_label: namespace
+  rules.yml: |
+    groups:
+      - name: circleguard.alerts
+        rules:
+          - alert: ServiceDown
+            expr: up{job="kubernetes-pods"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Service {{ $labels.app }} is down"
+              description: "Pod {{ $labels.app }} in {{ $labels.namespace }} unreachable for 2 min."
+          - alert: HighHttpErrorRate
+            expr: |
+              sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) by (app)
+              /
+              sum(rate(http_server_requests_seconds_count[5m])) by (app)
+              > 0.05
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High error rate on {{ $labels.app }}"
+              description: "More than 5% HTTP 5xx on {{ $labels.app }} for 5 min."
+          - alert: CircuitBreakerOpen
+            expr: resilience4j_circuitbreaker_state{state="open"} == 1
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Circuit breaker OPEN on {{ $labels.app }}"
+              description: "CB {{ $labels.name }} on {{ $labels.app }} OPEN for 1 min."
+          - alert: HighRequestLatency
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_server_requests_seconds_bucket[5m])) by (app, le)
+              ) > 2
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High p95 latency on {{ $labels.app }}"
+              description: "p95 latency on {{ $labels.app }} > 2s for 5 min."
+          - alert: HighExposurePromotionRate
+            expr: |
+              sum(increase(circleguard_health_promotions_total[10m])) by (namespace) > 50
+            for: 10m
+            labels:
+              severity: info
+            annotations:
+              summary: "Unusual promotion rate in {{ $labels.namespace }}"
+              description: "50+ health status promotions in 10 min — possible exposure event."
 ---
 apiVersion: v1
 kind: ServiceAccount

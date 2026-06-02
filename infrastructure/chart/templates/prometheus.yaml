@@ -49,8 +49,8 @@ data:
             labels:
               severity: critical
             annotations:
-              summary: "Service {{ "{{ $labels.app }}" }} is down"
-              description: "Pod {{ "{{ $labels.app }}" }} in {{ "{{ $labels.namespace }}" }} unreachable for 2 min."
+              summary: "CircleGuard service is down"
+              description: "A pod in namespace {{ .Release.Namespace }} has been unreachable for 2 min. Check kubectl get pods."
           - alert: HighHttpErrorRate
             expr: |
               sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) by (app)
@@ -61,16 +61,16 @@ data:
             labels:
               severity: warning
             annotations:
-              summary: "High error rate on {{ "{{ $labels.app }}" }}"
-              description: "More than 5% HTTP 5xx on {{ "{{ $labels.app }}" }} for 5 min."
+              summary: "High HTTP 5xx error rate detected"
+              description: "More than 5% of requests are returning 5xx errors. Check service logs."
           - alert: CircuitBreakerOpen
             expr: resilience4j_circuitbreaker_state{state="open"} == 1
             for: 1m
             labels:
               severity: warning
             annotations:
-              summary: "Circuit breaker OPEN on {{ "{{ $labels.app }}" }}"
-              description: "CB {{ "{{ $labels.name }}" }} on {{ "{{ $labels.app }}" }} OPEN for 1 min."
+              summary: "Resilience4j circuit breaker is OPEN"
+              description: "A circuit breaker has been open for more than 1 min. Downstream service may be unavailable."
           - alert: HighRequestLatency
             expr: |
               histogram_quantile(0.95,
@@ -80,8 +80,8 @@ data:
             labels:
               severity: warning
             annotations:
-              summary: "High p95 latency on {{ "{{ $labels.app }}" }}"
-              description: "p95 latency on {{ "{{ $labels.app }}" }} > 2s for 5 min."
+              summary: "High p95 request latency (>2s)"
+              description: "p95 latency has exceeded 2 seconds for 5 min. Possible performance degradation."
           - alert: HighExposurePromotionRate
             expr: |
               sum(increase(circleguard_health_promotions_total[10m])) by (namespace) > 50
@@ -89,8 +89,8 @@ data:
             labels:
               severity: info
             annotations:
-              summary: "Unusual promotion rate in {{ "{{ $labels.namespace }}" }}"
-              description: "50+ health status promotions in 10 min — possible exposure event."
+              summary: "Unusual health status promotion rate"
+              description: "More than 50 health status promotions in 10 min in namespace {{ .Release.Namespace }}. Possible exposure event."
 ---
 apiVersion: v1
 kind: ServiceAccount

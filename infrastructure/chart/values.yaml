@@ -138,3 +138,16 @@ filebeat:
     limits:
       cpu: 100m
       memory: 128Mi
+
+sonarqube:
+  enabled: true
+  image: sonarqube
+  tag: lts-community
+  storage: 10Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi

@@ -1,0 +1,142 @@
+{{- if .Values.sonarqube.enabled }}
+---
+# One-time Job: creates the sonarqube DB + user in the shared PostgreSQL.
+# Runs before SonarQube starts; idempotent (CREATE IF NOT EXISTS via || true).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sonarqube-init-db
+  labels:
+    app: sonarqube
+    circleguard/component: quality
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init-db
+          image: postgres:16-alpine
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              psql -h postgres -U admin -c "CREATE USER sonar WITH PASSWORD 'sonar';" 2>/dev/null || true
+              psql -h postgres -U admin -c "CREATE DATABASE sonarqube OWNER sonar;" 2>/dev/null || true
+              psql -h postgres -U admin -c "GRANT ALL PRIVILEGES ON DATABASE sonarqube TO sonar;" 2>/dev/null || true
+              echo "SonarQube DB init done."
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarqube
+  labels:
+    app: sonarqube
+    circleguard/component: quality
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sonarqube
+  template:
+    metadata:
+      labels:
+        app: sonarqube
+        circleguard/component: quality
+    spec:
+      initContainers:
+        # SonarQube's embedded Elasticsearch requires vm.max_map_count >= 262144.
+        # This init container sets it on the node via privileged sysctl.
+        - name: sysctl-config
+          image: busybox:1.36
+          command: ["sysctl", "-w", "vm.max_map_count=262144"]
+          securityContext:
+            privileged: true
+      containers:
+        - name: sonarqube
+          image: "{{ .Values.sonarqube.image }}:{{ .Values.sonarqube.tag }}"
+          ports:
+            - containerPort: 9000
+              name: http
+          env:
+            - name: SONAR_JDBC_URL
+              value: jdbc:postgresql://postgres:5432/sonarqube
+            - name: SONAR_JDBC_USERNAME
+              value: sonar
+            - name: SONAR_JDBC_PASSWORD
+              value: sonar
+            # Disable ES bootstrap checks (sysctl init may not persist between init/app containers
+            # on some managed K8s flavours — this is the fallback).
+            - name: SONAR_ES_BOOTSTRAP_CHECKS_DISABLE
+              value: "true"
+          resources:
+            {{- toYaml .Values.sonarqube.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /opt/sonarqube/data
+              subPath: data
+            - name: data
+              mountPath: /opt/sonarqube/extensions
+              subPath: extensions
+            - name: data
+              mountPath: /opt/sonarqube/logs
+              subPath: logs
+          readinessProbe:
+            httpGet:
+              path: /api/system/status
+              port: 9000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /api/system/status
+              port: 9000
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            failureThreshold: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: sonarqube-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarqube-data
+  labels:
+    app: sonarqube
+    circleguard/component: quality
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.persistence.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.sonarqube.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarqube
+  labels:
+    app: sonarqube
+    circleguard/component: quality
+spec:
+  selector:
+    app: sonarqube
+  ports:
+    - name: http
+      port: 9000
+      targetPort: 9000
+  # LoadBalancer so GitHub Actions runners (external) can reach SonarQube.
+  type: LoadBalancer
+{{- end }}

@@ -64,3 +64,77 @@ externalSecrets:
 
 rbac:
   ghaRoleArn: ""  # set at deploy time: --set rbac.ghaRoleArn=arn:aws:iam::<account>:role/circleguard-gha-role
+
+prometheus:
+  enabled: true
+  image: prom/prometheus
+  tag: v2.51.2
+  retention: 15d
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+grafana:
+  enabled: true
+  image: grafana/grafana
+  tag: 10.4.2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  adminPassword: circleguard-admin
+
+jaeger:
+  enabled: true
+  image: jaegertracing/all-in-one
+  tag: 1.57.0
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+elasticsearch:
+  enabled: true
+  image: docker.elastic.co/elasticsearch/elasticsearch
+  tag: 8.13.4
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+kibana:
+  enabled: true
+  image: docker.elastic.co/kibana/kibana
+  tag: 8.13.4
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+
+filebeat:
+  enabled: true
+  image: docker.elastic.co/beats/filebeat
+  tag: 8.13.4
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi

@@ -1,5 +1,10 @@
 replicaCount: 1
 
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8088"
+  prometheus.io/path: /actuator/prometheus
+
 image:
   repository: ""  # set at deploy time by GHA: --set image.repository=<registry>/circleguard
   pullPolicy: IfNotPresent

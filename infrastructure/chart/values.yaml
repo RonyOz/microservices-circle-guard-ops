@@ -140,7 +140,7 @@ filebeat:
       memory: 128Mi
 
 sonarqube:
-  enabled: true
+  enabled: false
   image: sonarqube
   tag: lts-community
   storage: 10Gi

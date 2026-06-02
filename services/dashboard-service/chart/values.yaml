@@ -43,6 +43,7 @@ readinessProbe:
   periodSeconds: 5
 
 env:
+  JAVA_TOOL_OPTIONS: "-Xmx192m -Xms128m -XX:+UseContainerSupport"
   DB_HOST: "postgres"
   DB_NAME: "circleguard_dashboard"
   PROMOTION_SERVICE_URL: "http://promotion-service:8086"

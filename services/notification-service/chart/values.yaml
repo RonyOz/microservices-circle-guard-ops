@@ -46,6 +46,7 @@ readinessProbe:
   periodSeconds: 5
 
 env:
+  JAVA_TOOL_OPTIONS: "-Xmx192m -Xms128m -XX:+UseContainerSupport"
   KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
 
 envFrom:

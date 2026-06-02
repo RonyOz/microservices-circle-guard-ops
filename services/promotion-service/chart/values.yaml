@@ -46,6 +46,7 @@ readinessProbe:
   periodSeconds: 5
 
 env:
+  JAVA_TOOL_OPTIONS: "-Xmx384m -Xms256m -XX:+UseContainerSupport"
   DB_HOST: "postgres"
   DB_NAME: "circleguard_promotion"
   REDIS_HOST: "redis-master"

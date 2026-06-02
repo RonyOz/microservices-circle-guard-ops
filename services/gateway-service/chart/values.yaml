@@ -46,6 +46,7 @@ readinessProbe:
   periodSeconds: 5
 
 env:
+  JAVA_TOOL_OPTIONS: "-Xmx192m -Xms128m -XX:+UseContainerSupport"
   REDIS_HOST: "redis-master"
 
 envFrom:

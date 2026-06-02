@@ -425,9 +425,9 @@ CLOSED ──(50% fallos en 10 llamadas)──► OPEN ──(10s)──► HALF
 
 **Librería:** `io.github.resilience4j:resilience4j-spring-boot3:2.2.0` + `spring-boot-starter-aop`
 
-**auth-service → identity-service:**
+**auth-service → identity-service (fail-fast):**
 
-`IdentityClient` llama a `identity-service` para mapear identidades reales a UUIDs anónimos. Si `identity-service` está caído, el circuit breaker abre y retorna un UUID determinístico derivado de la identidad (fallback privacy-safe).
+`IdentityClient` llama a `identity-service` para mapear identidades reales a UUIDs anónimos. El UUID resultante se firma dentro del JWT, así que **no** se puede fabricar un valor de fallback: si `identity-service` recuperara luego un mapeo distinto, los tokens emitidos durante la caída referenciarían una identidad inexistente. Por eso el fallback hace *fail-fast* — lanza una excepción determinística (se traduce a 503) en lugar de inventar un UUID. El breaker aún corta el tráfico para no acumular timeouts.
 
 ```java
 // services/circleguard-auth-service/src/main/java/.../client/IdentityClient.java
@@ -436,23 +436,30 @@ public UUID getAnonymousId(String realIdentity) {
     // llamada HTTP a identity-service
 }
 
-public UUID getAnonymousIdFallback(String realIdentity, Exception ex) {
-    // UUID tipo 3 (MD5) — determinístico, sin red, sin exponer identidad real
-    return UUID.nameUUIDFromBytes(realIdentity.getBytes());
+private UUID getAnonymousIdFallback(String realIdentity, Throwable t) {
+    log.error("Circuit breaker fallback: identity-service unavailable", t);
+    throw new IllegalStateException("identity-service unavailable (circuit breaker open)", t);
 }
 ```
 
-**dashboard-service → promotion-service:**
+**dashboard-service → promotion-service (degradación elegante):**
 
-`PromotionClient` consulta estadísticas de salud del `promotion-service`. Si cae, el dashboard retorna un mapa de estado degradado en lugar de propagar un 500.
+`PromotionClient` consulta estadísticas de salud del `promotion-service`. Si cae, el dashboard retorna un mapa de estado degradado en lugar de propagar un 500. Cada método anotado tiene su propio fallback (la firma del fallback debe replicar los argumentos del método + un `Throwable`).
 
 ```java
 // services/circleguard-dashboard-service/src/main/java/.../client/PromotionClient.java
-@CircuitBreaker(name = "promotionService", fallbackMethod = "getHealthStatsFallback")
+@CircuitBreaker(name = "promotionService", fallbackMethod = "healthStatsFallback")
 public Map<String, Object> getHealthStats() { ... }
 
-public Map<String, Object> getHealthStatsFallback(Exception ex) {
-    return Map.of("status", "unavailable", "timestamp", new Date());
+private Map<String, Object> healthStatsFallback(Throwable t) {
+    return Map.of("error", "Service unavailable", "timestamp", new Date());
+}
+
+@CircuitBreaker(name = "promotionService", fallbackMethod = "departmentStatsFallback")
+public Map<String, Object> getHealthStatsByDepartment(String department) { ... }
+
+private Map<String, Object> departmentStatsFallback(String department, Throwable t) {
+    return Map.of("error", "Service unavailable", "department", department, "timestamp", new Date());
 }
 ```
 
@@ -463,12 +470,26 @@ resilience4j:
   circuitbreaker:
     instances:
       identityService:      # o promotionService
+        register-health-indicator: true   # aparece en /actuator/health
+        sliding-window-type: COUNT_BASED
         sliding-window-size: 10
         minimum-number-of-calls: 5
         failure-rate-threshold: 50        # abre con 50% de fallos
         wait-duration-in-open-state: 10s  # espera 10s antes de HALF_OPEN
         permitted-number-of-calls-in-half-open-state: 3
-        sliding-window-type: COUNT_BASED
+        automatic-transition-from-open-to-half-open-enabled: true
+```
+
+Además se habilita el health indicator y se exponen las métricas (`resilience4j_circuitbreaker_state`, `_calls`) — ya capturadas por el registry de Micrometer/Prometheus existente:
+
+```yaml
+management:
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
 ```
 
 **Archivos relevantes:**
@@ -481,10 +502,11 @@ resilience4j:
 
 ### Beneficios
 
-- Fallos de `identity-service` no bloquean el flujo de autenticación — el sistema sigue operando con UUID de fallback
-- Fallos de `promotion-service` no propagan errores 500 al dashboard — el usuario ve estado "unavailable" en lugar de pantalla de error
+- Fallos de `identity-service` no agotan recursos del flujo de login: el breaker en OPEN corta el tráfico y responde rápido (503 determinístico) en vez de colgar en timeouts de red. No se fabrican UUIDs para no corromper el mapeo de identidad firmado en el JWT
+- Fallos de `promotion-service` no propagan errores 500 al dashboard — el usuario ve estado degradado ("Service unavailable") en lugar de pantalla de error
 - El breaker en OPEN hace fail-fast: no espera timeout de red en cada llamada mientras el servicio está caído
 - Recuperación automática via HALF_OPEN — no requiere intervención manual para restablecer tráfico
+- Estado y métricas del breaker visibles en `/actuator/health` y `/actuator/prometheus` para alerting
 
 ---
 
@@ -516,7 +538,7 @@ Feature Toggle (también llamado Feature Flag) es un patrón que permite activar
 **Spring Boot (`AnalyticsService.java`):**
 
 ```java
-@Value("${feature.k-anonymity.enabled:true}")
+@Value("${feature.kanonymity.enabled:true}")
 private boolean kAnonymityEnabled;
 
 public Map<String, Object> getDepartmentStats(String department) {
@@ -525,13 +547,7 @@ public Map<String, Object> getDepartmentStats(String department) {
 }
 ```
 
-**Configuración (`application.yml`):**
-
-```yaml
-feature:
-  k-anonymity:
-    enabled: ${FEATURE_KANONYMITY_ENABLED:true}
-```
+**Binding de configuración:** no se necesita una entrada explícita en `application.yml`. La env var del chart `FEATURE_KANONYMITY_ENABLED` mapea por *relaxed binding* de Spring a la propiedad `feature.kanonymity.enabled`; el default `:true` del `@Value` garantiza comportamiento privacy-first si la var no está presente.
 
 **Helm chart (`values.yaml`):**
 

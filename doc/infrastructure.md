@@ -44,7 +44,7 @@ Region: us-east-1
 | ECR Repository | `circleguard` | Registro de imágenes. Tag immutability activado. Todas las imágenes usan el patrón `<service>-sha-<commit7>` |
 | IAM OIDC Provider | `token.actions.githubusercontent.com` | Federación OIDC para GitHub Actions — sin access keys de larga duración |
 | IAM Role (GHA) | `circleguard-gha-role` | Asumido por GHA via `AssumeRoleWithWebIdentity`. Permisos: ECR push + EKS describe + Secrets Manager write |
-| S3 Bucket | `circleguard-tfstate` | Estado remoto de Terraform con S3-native locking (Terraform ≥ 1.10, sin necesidad de DynamoDB) |
+| S3 Bucket | `circleguard-tfstate-<account>` | Estado remoto de Terraform con S3-native locking (Terraform ≥ 1.10, sin necesidad de DynamoDB) |
 | Secrets Manager | `circleguard/dev`, `/stage`, `/production` | Secretos runtime (DB passwords, JWT key) leídos por pods via IRSA |
 | AWS Budgets | — | Alerta a $20/mes para controlar costos del proyecto académico |
 
@@ -127,8 +127,8 @@ sin workspaces. La infra se aplica una vez; la separación por ambiente ocurre a
 nivel K8s (namespaces) y de despliegue (Helm release por namespace), no a nivel IaC.
 
 ```bash
-terraform plan -var-file=terraform.tfvars -out=tfplan
-terraform apply tfplan
+./scripts/init-s3-backend.sh   # crea el bucket de state (una vez por cuenta)
+./scripts/aws-up.sh            # terraform apply
 ```
 
 El **provisioning corre localmente** (`terraform apply` con creds admin, tras crear el bucket
@@ -149,16 +149,20 @@ distinto por env + state aislado — descartado aquí por costo.
 ### Remote State
 
 ```hcl
-# backend.tf
+# main.tf
 terraform {
   backend "s3" {
-    bucket       = "circleguard-tfstate"
-    key          = "circleguard/terraform.tfstate"
+    key          = "global/terraform.tfstate"
     region       = "us-east-1"
+    encrypt      = true
     use_lockfile = true   # S3-native locking — no requiere DynamoDB (TF ≥ 1.10)
   }
 }
 ```
+
+El nombre del bucket NO está hardcoded — se pasa en
+`terraform init -backend-config="bucket=circleguard-tfstate-<account>"`. El bucket lo crea
+`scripts/init-s3-backend.sh` (una vez por cuenta).
 
 ---
 

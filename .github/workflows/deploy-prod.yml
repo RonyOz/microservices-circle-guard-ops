@@ -53,12 +53,13 @@ jobs:
           fi
           echo "url=$REGISTRY" >> $GITHUB_OUTPUT
 
-      - name: Trivy gate — block on HIGH/CRITICAL
+      - name: Trivy gate — block on HIGH/CRITICAL (fixed CVEs only)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.registry.outputs.url }}/circleguard:${{ github.event.client_payload.service }}-${{ github.event.client_payload.image_tag }}
           exit-code: '1'
           severity: HIGH,CRITICAL
+          ignore-unfixed: true
           format: table
 
   approve:

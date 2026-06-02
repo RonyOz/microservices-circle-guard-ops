@@ -42,8 +42,6 @@ spec:
           env:
             - name: GF_SECURITY_ADMIN_PASSWORD
               value: {{ .Values.grafana.adminPassword | quote }}
-            - name: GF_INSTALL_PLUGINS
-              value: "grafana-jaeger-datasource"
           ports:
             - containerPort: 3000
           resources:

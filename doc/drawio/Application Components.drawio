@@ -1,0 +1,235 @@
+<mxfile host="65bd71144e">
+    <diagram name="Application-Components" id="app_components_circleguard">
+        <mxGraphModel dx="1396" dy="1023" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1340" pageHeight="860" background="none" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="CircleGuard — Application Components (Proyecto Final IngeSoft V)" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=14;fontStyle=1;labelBackgroundColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="20" width="700" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="authors" value="8 Spring Boot microservices · sync calls (RestClient/WebClient, Resilience4j CB) — solid · Kafka domain events (topic) — dashed" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=10;labelBackgroundColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="44" width="950" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="client" value="Client (web / mobile)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;fillColor=none;fontFamily=Verdana;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="35" y="148" width="120" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="gateway" value="gateway-service · :8086&#xa;Spring Cloud Gateway (routing)&#xa;Redis QR token cache" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#e1d5e7;strokeColor=#9673a6;fontFamily=Verdana;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="130" width="210" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="redis" value="Redis&#xa;QR cache" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Verdana;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="536" y="138" width="70" height="64" as="geometry"/>
+                </mxCell>
+                <mxCell id="auth" value="auth-service · :8081&#xa;Login · JWT issue · LDAP bind" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#f8cecc;strokeColor=#b85450;fontFamily=Verdana;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="320" width="190" height="64" as="geometry"/>
+                </mxCell>
+                <mxCell id="auth_pg" value="PostgreSQL" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Verdana;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="43" y="402" width="85" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="auth_ldap" value="OpenLDAP" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Verdana;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="140" y="400" width="90" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="identity" value="identity-service · :8082&#xa;Encrypted identity vault&#xa;(anonymized IDs)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#f8cecc;strokeColor=#b85450;fontFamily=Verdana;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="540" width="190" height="64" as="geometry"/>
+                </mxCell>
+                <mxCell id="id_pg" value="PostgreSQL (vault)" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Verdana;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="624" width="130" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="form" value="form-service · :8085&#xa;Dynamic questionnaires" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontFamily=Verdana;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="320" width="190" height="64" as="geometry"/>
+                </mxCell>
+                <mxCell id="form_pg" value="PostgreSQL" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Verdana;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="429" width="130" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="promotion" value="promotion-service · :8083&#xa;Neo4j exposure-circle graph (14-day window)&#xa;Healthy → Suspect → Probable → Confirmed" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontFamily=Verdana;fontSize=10;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="530" width="240" height="84" as="geometry"/>
+                </mxCell>
+                <mxCell id="promo_neo" value="Neo4j" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Verdana;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="634" width="100" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="promo_pg" value="PostgreSQL" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Verdana;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="450" y="634" width="100" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="dashboard" value="dashboard-service · :8087&#xa;Stats · K-anonymity filter" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#d5e8d4;strokeColor=#82b366;fontFamily=Verdana;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="640" y="320" width="200" height="64" as="geometry"/>
+                </mxCell>
+                <mxCell id="dash_pg" value="PostgreSQL" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Verdana;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="635" y="411" width="90" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="dash_neo" value="Neo4j" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Verdana;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="745" y="404" width="95" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="notification" value="notification-service · :8084&#xa;Alerts" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#ffe6cc;strokeColor=#d79b00;fontFamily=Verdana;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="640" y="540" width="200" height="64" as="geometry"/>
+                </mxCell>
+                <mxCell id="smtp" value="SMTP / FCM (external)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=none;dashed=1;strokeColor=#d79b00;fontFamily=Verdana;fontSize=9;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="655" y="624" width="170" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="file" value="file-service · :8088&#xa;Attachments / certificates" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Verdana;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="920" y="320" width="190" height="64" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3" value="S3-compatible storage" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Verdana;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="940" y="404" width="150" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="kafka_box" value="Apache Kafka — event bus&#xa;topics:&#xa;• survey.submitted&#xa;• promotion.status.changed&#xa;• proximity.detected&#xa;• audit.identity.accessed" style="rounded=1;whiteSpace=wrap;html=1;arcSize=6;fillColor=none;strokeColor=#000000;dashed=1;fontFamily=Verdana;fontSize=9;align=left;spacingLeft=8;verticalAlign=top;spacingTop=6;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="520" width="210" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="audit" value="Audit log consumer" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=none;dashed=1;strokeColor=#666666;fontFamily=Verdana;fontSize=9;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="720" width="190" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend_box" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=4;fillColor=none;strokeColor=#999999;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="680" width="210" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend_lbl" value="Legend&#xa;— solid: synchronous HTTP call&#xa;- - dashed: Kafka event (topic)&#xa;[CB]: Resilience4j Circuit Breaker&#xa;①②③: contact-tracing flow" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=9;labelBackgroundColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="908" y="685" width="195" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_cli_gw" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="client" target="gateway" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_cli_gw_lbl" value="HTTPS" style="edgeLabel;html=1;align=center;fontFamily=Verdana;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="e_cli_gw" connectable="0" vertex="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-3" y="-20" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_gw_redis" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;endFill=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#666666;" parent="1" source="gateway" target="redis" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_gw_auth" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="gateway" target="auth" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="135" y="300"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_gw_auth_lbl" value="route" style="edgeLabel;html=1;align=center;fontFamily=Verdana;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="e_gw_auth" connectable="0" vertex="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_gw_form" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;exitX=0.6;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="gateway" target="form" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="435" y="300"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_gw_form_lbl" value="route" style="edgeLabel;html=1;align=center;fontFamily=Verdana;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="e_gw_form" connectable="0" vertex="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_gw_dash" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="gateway" target="dashboard" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="740" y="270"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_gw_dash_lbl" value="route" style="edgeLabel;html=1;align=center;fontFamily=Verdana;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="e_gw_dash" connectable="0" vertex="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_gw_file" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="gateway" target="file" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1015" y="250"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_gw_file_lbl" value="route" style="edgeLabel;html=1;align=center;fontFamily=Verdana;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="e_gw_file" connectable="0" vertex="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_auth_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="auth" target="identity" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_auth_id_lbl" value="resolve anonymous ID · [CB]" style="edgeLabel;html=1;align=center;fontFamily=Verdana;fontSize=9;fontColor=#b85450;labelBackgroundColor=#FFFFFF;" parent="e_auth_id" connectable="0" vertex="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="2" y="8" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_dash_promo" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;" parent="1" source="dashboard" target="promotion" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="740" y="500"/>
+                            <mxPoint x="600" y="500"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_dash_promo_lbl" value="stats query · [CB]" style="edgeLabel;html=1;align=center;fontFamily=Verdana;fontSize=9;fontColor=#82b366;labelBackgroundColor=#FFFFFF;" parent="e_dash_promo" connectable="0" vertex="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint y="-10" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_form_promo" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;dashPattern=8 8;strokeColor=#6c8ebf;" parent="1" source="form" target="promotion" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="450" y="530" as="targetPoint"/>
+                        <Array as="points">
+                            <mxPoint x="368" y="494"/>
+                            <mxPoint x="368" y="494"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_form_promo_lbl" value="①  survey.submitted" style="edgeLabel;html=1;align=center;fontFamily=Verdana;fontSize=9;fontStyle=1;labelBackgroundColor=#FFFFFF;" parent="e_form_promo" connectable="0" vertex="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="132" y="-66" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_promo_self" value="②  14-day graph traversal + status promotion" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Verdana;fontSize=9;fontStyle=2;fontColor=#6c8ebf;labelBackgroundColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="304" y="498" width="240" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_promo_notif" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;dashPattern=8 8;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#d79b00;" parent="1" source="promotion" target="notification" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_promo_notif_lbl" value="③  promotion.status.changed" style="edgeLabel;html=1;align=center;fontFamily=Verdana;fontSize=9;fontStyle=1;labelBackgroundColor=#FFFFFF;" parent="e_promo_notif" connectable="0" vertex="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_notif_smtp" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#d79b00;" parent="1" source="notification" target="smtp" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_notif_smtp_lbl" value="alert" style="edgeLabel;html=1;align=center;fontFamily=Verdana;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="e_notif_smtp" connectable="0" vertex="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_id_audit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;dashPattern=8 8;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#666666;" parent="1" source="identity" target="audit" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="135" y="700"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_id_audit_lbl" value="audit.identity.accessed" style="edgeLabel;html=1;align=center;fontFamily=Verdana;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="e_id_audit" connectable="0" vertex="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-40" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="s_auth_pg" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;endFill=0;strokeColor=#999999;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" parent="1" source="auth" target="auth_pg" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_auth_ldap" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;endFill=0;strokeColor=#999999;exitX=0.75;exitY=1;entryX=0.5;entryY=0;" parent="1" source="auth" target="auth_ldap" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_id_pg" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;endFill=0;strokeColor=#999999;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="identity" target="id_pg" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_form_pg" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;endFill=0;strokeColor=#999999;" parent="1" source="form" target="form_pg" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="504" y="414"/>
+                            <mxPoint x="504" y="414"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="s_promo_neo" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;endFill=0;strokeColor=#999999;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" parent="1" source="promotion" target="promo_neo" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_promo_pg" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;endFill=0;strokeColor=#999999;exitX=0.6;exitY=1;entryX=0.5;entryY=0;" parent="1" source="promotion" target="promo_pg" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_dash_pg" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;endFill=0;strokeColor=#999999;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" parent="1" source="dashboard" target="dash_pg" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_dash_neo" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;endFill=0;strokeColor=#999999;exitX=0.75;exitY=1;entryX=0.5;entryY=0;" parent="1" source="dashboard" target="dash_neo" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_file_s3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;endFill=0;strokeColor=#999999;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="file" target="s3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

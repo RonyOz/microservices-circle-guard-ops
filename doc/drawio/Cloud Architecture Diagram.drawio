@@ -4,10 +4,10 @@
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-                <mxCell id="title" value="CircleGuard - Cloud Architecture (Proyecto Final IngeSoft V)" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=14;fontStyle=1;labelBackgroundColor=none;" parent="1" vertex="1">
+                <mxCell id="title" value="CircleGuard — Infrastructure &amp; CI/CD View (Proyecto Final IngeSoft V)" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=14;fontStyle=1;labelBackgroundColor=none;" parent="1" vertex="1">
                     <mxGeometry x="40" y="20" width="600" height="24" as="geometry"/>
                 </mxCell>
-                <mxCell id="authors" value="Rony Ordoñez&amp;nbsp; &amp;amp; Juan Pablo PArra | AWS-primary platform (EKS + ECR + GHA OIDC), Azure secondary for Multi-Cloud bonus" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=10;labelBackgroundColor=none;" parent="1" vertex="1">
+                <mxCell id="authors" value="Rony Ordoñez &amp;amp; Juan Pablo Parra | AWS-primary platform (EKS + ECR + GHA OIDC), Azure secondary for Multi-Cloud bonus" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=10;labelBackgroundColor=none;" parent="1" vertex="1">
                     <mxGeometry x="40" y="44" width="800" height="18" as="geometry"/>
                 </mxCell>
                 <mxCell id="dev_user" value="Developer" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;fillColor=none;fontFamily=Verdana;fontSize=10;" parent="1" vertex="1">
@@ -97,10 +97,13 @@
                 <mxCell id="aws_vpc_lbl" value="AWS VPC circleguard-vpc (10.0.0.0/16) — us-east-1" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=10;fontStyle=1;fontColor=#0066CC;labelBackgroundColor=none;" parent="1" vertex="1">
                     <mxGeometry x="1084" y="94" width="480" height="20" as="geometry"/>
                 </mxCell>
+                <mxCell id="eks_addons_lbl" value="EKS managed node group · m7i-flex.large ×2 · addons: EBS CSI driver (gp3 PVCs), AWS Load Balancer Controller, External Secrets Operator" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=8;fontStyle=2;fontColor=#0066CC;labelBackgroundColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="1084" y="110" width="480" height="14" as="geometry"/>
+                </mxCell>
                 <mxCell id="k8s_icon" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=default;verticalAlign=top;aspect=fixed;imageAspect=0;image=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/kubernetes.svg;fillColor=#FFFFFF;" parent="1" vertex="1">
                     <mxGeometry x="1552" y="95" width="20" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="alb" value="ALB (public subnets)&#xa;+ Ingress controller + cert-manager" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#fff2cc;fontFamily=Verdana;fontSize=10;strokeColor=#d6b656;" parent="1" vertex="1">
+                <mxCell id="alb" value="ALB (public subnets)&#xa;AWS Load Balancer Controller v2.8&#xa;(spec.ingressClassName)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#fff2cc;fontFamily=Verdana;fontSize=10;strokeColor=#d6b656;" parent="1" vertex="1">
                     <mxGeometry x="1214" y="130" width="220" height="50" as="geometry"/>
                 </mxCell>
                 <mxCell id="ns_dev_box" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=6;fillColor=none;strokeColor=#999999;dashed=1;" parent="1" vertex="1">

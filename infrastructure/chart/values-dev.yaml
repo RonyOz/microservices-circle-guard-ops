@@ -1,0 +1,42 @@
+# Dev namespace overrides — lighter stack, no ELK, no SonarQube.
+# Applied on top of values.yaml by deploy-data-plane.yml when namespace == dev.
+
+elasticsearch:
+  enabled: false
+
+kibana:
+  enabled: false
+
+filebeat:
+  enabled: false
+
+sonarqube:
+  enabled: false
+
+# Reduce observability resource footprint in dev
+prometheus:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+
+grafana:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+jaeger:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi

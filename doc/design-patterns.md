@@ -227,7 +227,7 @@ La configuración no-sensible (DB host, service URLs, puerto) también es extern
 - `.github/workflows/deploy-{dev,stage,prod}.yml` — seed de AWS Secrets Manager por ambiente (`put-secret-value`)
 - `terraform/aws/modules/irsa-secrets/main.tf` — IAM role para ESO + contenedores de SM secrets
 - `services/<service>/chart/templates/deployment.yaml` — `envFrom.secretRef`
-- `docs/secrets-management.md` — documentación completa de la cadena
+- `doc/secrets-management.md` — documentación completa de la cadena
 
 ### Beneficios
 

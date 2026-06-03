@@ -168,7 +168,7 @@ To rotate a runtime secret (DB password, JWT key):
 5. Update the corresponding GitHub Actions Secret (same name) for CI-time usage:
    Settings → Secrets → Actions → update `DB_PASSWORD` / `JWT_SECRET`
 
-See `docs/secrets-management.md` for the full secrets matrix and architecture.
+See `doc/secrets-management.md` for the full secrets matrix and architecture.
 
 ---
 

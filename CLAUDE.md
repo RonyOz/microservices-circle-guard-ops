@@ -15,7 +15,7 @@ Read both files before starting any task.
 
 Service-agnostic CI/CD, infrastructure, and deployment config. The app code lives in `microservices-circle-guard-dev`. The dev repo triggers this repo via `repository_dispatch`, passing the service name and image tag.
 
-**Platform:** AWS (EKS/ECR/S3/IAM-OIDC) + GitHub Actions. One shared EKS cluster `circleguard-eks`; environments `dev`/`stage`/`production` are **Kubernetes namespaces**, not separate clusters. (The pre-pivot DigitalOcean + Jenkins stack has been removed — see `doc/taller2.md` for history.)
+**Platform:** AWS (EKS/ECR/S3/IAM-OIDC) + GitHub Actions. One shared EKS cluster `circleguard-eks`; environments `dev`/`stage`/`production` are **Kubernetes namespaces**, not separate clusters. (The pre-pivot DigitalOcean + Jenkins stack has been removed — recoverable from git history.)
 
 ## Key files
 

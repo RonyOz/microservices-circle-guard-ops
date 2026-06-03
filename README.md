@@ -182,6 +182,10 @@ workflow trigger could nuke the account. Provisioning is therefore a deliberate 
 | `doc/secrets-management.md` | Secrets matrix (ESO + Secrets Manager) |
 | `doc/design-patterns.md` | Resilience + deployment patterns |
 | `doc/branching-strategy.md` | Trunk-based workflow |
-| `doc/taller2.md` | Historical (pre-pivot DigitalOcean + Jenkins) — archive only |
+| `doc/change-management.md` | PR template, CODEOWNERS, definition of done |
+| `doc/operations-manual.md` | Deploy, rollback, logs, scaling runbook |
+| `doc/performance-analysis.md` | Locust results (p95 / throughput / error-rate) |
+| `doc/sprints.md` | Sprint retros, velocity, burndown |
+| `doc/user-stories.md` | Backlog / user stories |
 
 > Full workspace context: `/home/ronyoz/dev/cg/CLAUDE.md` · Completeness tracker: `PROJECT-FINAL-PLAN.md`.

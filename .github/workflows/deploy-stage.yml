@@ -12,6 +12,7 @@ env:
 permissions:
   id-token: write
   contents: read
+  issues: write
 
 jobs:
   deploy:
@@ -139,3 +140,16 @@ jobs:
       - name: Stop port-forward
         if: always()
         run: kill $(cat /tmp/pf.pid) 2>/dev/null || true
+
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[STAGE] Deploy failed — ${{ github.event.client_payload.service }}`,
+              body: `## Deploy to stage failed\n\n- **Service:** ${{ github.event.client_payload.service }}\n- **Image tag:** ${{ github.event.client_payload.image_tag }}\n- **Run:** [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n\nInvestigate and close this issue once resolved.`,
+              labels: ['deploy-failure', 'stage']
+            })

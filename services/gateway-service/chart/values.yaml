@@ -53,6 +53,10 @@ readinessProbe:
 env:
   JAVA_TOOL_OPTIONS: "-Xmx192m -Xms128m -XX:+UseContainerSupport"
   REDIS_HOST: "redis-master"
+  # Rate Limiting — External Configuration Store pattern (tunable without image rebuild)
+  RATE_LIMIT_REQUESTS_PER_WINDOW: "60"
+  RATE_LIMIT_WINDOW_SECONDS: "60"
+  QR_EXPIRATION_SECONDS: "300"
 
 envFrom:
   - secretRef:

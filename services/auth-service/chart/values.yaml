@@ -56,6 +56,12 @@ env:
   DB_NAME: "circleguard_auth"
   LDAP_HOST: "openldap"
   IDENTITY_SERVICE_URL: "http://identity-service:8082"
+  # Circuit Breaker tuning — External Configuration Store pattern (adjust per-env without rebuild)
+  CIRCUIT_BREAKER_FAILURE_RATE: "50"
+  CIRCUIT_BREAKER_WAIT_DURATION: "10s"
+  CIRCUIT_BREAKER_SLIDING_WINDOW_SIZE: "10"
+  # JWT / token tuning
+  JWT_EXPIRATION_MS: "3600000"
 
 envFrom:
   - secretRef:

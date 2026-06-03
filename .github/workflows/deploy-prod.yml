@@ -154,3 +154,22 @@ jobs:
             2>/dev/null || echo "Release v${VERSION} already exists in dev repo, skipping"
         env:
           GH_TOKEN: ${{ secrets.OPS_REPO_TOKEN }}
+
+  notify-failure:
+    runs-on: ubuntu-latest
+    needs: [verify-image, trivy-gate, approve, deploy, release-notes]
+    if: failure()
+    permissions:
+      issues: write
+    steps:
+      - name: Open issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[PROD] Deploy failed — ${{ github.event.client_payload.service }} v${{ github.event.client_payload.version }}`,
+              body: `## Deploy to production failed\n\n- **Service:** ${{ github.event.client_payload.service }}\n- **Version:** ${{ github.event.client_payload.version }}\n- **Image tag:** ${{ github.event.client_payload.image_tag }}\n- **Run:** [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n\n> Investigate, rollback if needed (\`helm rollback <release> -n production\`), and close this issue once resolved.`,
+              labels: ['deploy-failure', 'production', 'priority-high']
+            })

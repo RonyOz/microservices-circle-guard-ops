@@ -62,3 +62,13 @@ envFrom:
   - secretRef:
       name: gateway-service-secret
       # Keys expected: JWT_SECRET
+
+# Ingress — disabled by default; enable in prod with certificateArn and host override:
+#   helm upgrade ... --set ingress.enabled=true \
+#                    --set ingress.host=gateway.circleguard.edu \
+#                    --set ingress.certificateArn=arn:aws:acm:<region>:<account>:certificate/<id>
+ingress:
+  enabled: false
+  host: ""
+  certificateArn: ""
+  annotations: {}

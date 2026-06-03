@@ -47,6 +47,24 @@ jobs:
             --secret-id "circleguard/${{ env.K8S_NAMESPACE }}" \
             --secret-string "{\"DB_USERNAME\":\"circleguard\",\"DB_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"NEO4J_USERNAME\":\"neo4j\",\"NEO4J_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"JWT_SECRET\":\"${{ secrets.JWT_SECRET }}\"}"
 
+      - name: Trivy scan — image vulnerability report
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.registry.outputs.url }}/circleguard:${{ github.event.client_payload.service }}-${{ github.event.client_payload.image_tag }}
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: '0'
+          severity: CRITICAL,HIGH,MEDIUM
+        continue-on-error: true
+
+      - name: Upload Trivy scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-report-${{ github.event.client_payload.service }}-${{ github.run_id }}
+          path: trivy-results.sarif
+          if-no-files-found: ignore
+
       - name: Helm lint
         run: |
           helm lint services/${{ github.event.client_payload.service }}/chart/

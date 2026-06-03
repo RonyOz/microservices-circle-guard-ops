@@ -58,3 +58,14 @@ envFrom:
   - secretRef:
       name: dashboard-service-secret
       # Keys expected: DB_USERNAME, DB_PASSWORD
+
+# Ingress — disabled by default; dashboard uses internal ALB (not internet-facing).
+# Enable in prod:
+#   helm upgrade ... --set ingress.enabled=true \
+#                    --set ingress.host=dashboard.circleguard.internal \
+#                    --set ingress.certificateArn=arn:aws:acm:<region>:<account>:certificate/<id>
+ingress:
+  enabled: false
+  host: ""
+  certificateArn: ""
+  annotations: {}

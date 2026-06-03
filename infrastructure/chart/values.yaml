@@ -61,6 +61,9 @@ externalSecrets:
     - gateway-service
     - dashboard-service
     - file-service
+    - postgres
+    - openldap
+    - neo4j
 
 rbac:
   ghaRoleArn: ""  # set at deploy time: --set rbac.ghaRoleArn=arn:aws:iam::<account>:role/circleguard-gha-role

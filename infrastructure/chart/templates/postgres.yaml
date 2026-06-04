@@ -28,7 +28,7 @@ spec:
               name: postgres
           env:
             - name: POSTGRES_USER
-              value: admin
+              value: circleguard
             - name: POSTGRES_DB
               value: circleguard
             - name: POSTGRES_PASSWORD
@@ -51,7 +51,7 @@ spec:
               mountPath: /docker-entrypoint-initdb.d
           readinessProbe:
             exec:
-              command: [pg_isready, -U, admin, -d, circleguard]
+              command: [pg_isready, -U, circleguard, -d, circleguard]
             initialDelaySeconds: 10
             periodSeconds: 5
       volumes:

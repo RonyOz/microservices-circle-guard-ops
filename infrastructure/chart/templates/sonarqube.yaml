@@ -30,9 +30,9 @@ spec:
             - sh
             - -c
             - |
-              psql -h postgres -U admin -c "CREATE USER sonar WITH PASSWORD 'sonar';" 2>/dev/null || true
-              psql -h postgres -U admin -c "CREATE DATABASE sonarqube OWNER sonar;" 2>/dev/null || true
-              psql -h postgres -U admin -c "GRANT ALL PRIVILEGES ON DATABASE sonarqube TO sonar;" 2>/dev/null || true
+              psql -h postgres -U circleguard -c "CREATE USER sonar WITH PASSWORD 'sonar';" 2>/dev/null || true
+              psql -h postgres -U circleguard -c "CREATE DATABASE sonarqube OWNER sonar;" 2>/dev/null || true
+              psql -h postgres -U circleguard -c "GRANT ALL PRIVILEGES ON DATABASE sonarqube TO sonar;" 2>/dev/null || true
               echo "SonarQube DB init done."
 ---
 apiVersion: apps/v1

@@ -40,12 +40,6 @@ jobs:
           fi
           echo "url=$REGISTRY" >> $GITHUB_OUTPUT
 
-      - name: Sync runtime secrets to Secrets Manager
-        run: |
-          aws secretsmanager put-secret-value \
-            --secret-id "circleguard/${{ env.K8S_NAMESPACE }}" \
-            --secret-string "{\"DB_USERNAME\":\"circleguard\",\"DB_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"NEO4J_USERNAME\":\"neo4j\",\"NEO4J_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"JWT_SECRET\":\"${{ secrets.JWT_SECRET }}\"}"
-
       - name: Helm lint
         run: |
           helm lint services/${{ github.event.client_payload.service }}/chart/

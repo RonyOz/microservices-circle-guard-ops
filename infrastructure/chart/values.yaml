@@ -52,7 +52,8 @@ externalSecrets:
   enabled: true
   secretStoreName: circleguard-secret-store  # must match the store created by bootstrap-eso.yml
   smSecretPath: ""  # set at deploy time: --set externalSecrets.smSecretPath=circleguard/<namespace>
-  services:
+  # App services: SM keys == Spring env var names → verbatim extract (envFrom: secretRef).
+  appServices:
     - auth-service
     - identity-service
     - promotion-service
@@ -61,9 +62,8 @@ externalSecrets:
     - gateway-service
     - dashboard-service
     - file-service
-    - postgres
-    - openldap
-    - neo4j
+  # postgres/openldap/neo4j use image-specific keys (+ neo4j a composed value):
+  # mapped explicitly in templates/external-secrets.yaml, not via this list.
 
 rbac:
   ghaRoleArn: ""  # set at deploy time: --set rbac.ghaRoleArn=arn:aws:iam::<account>:role/circleguard-gha-role

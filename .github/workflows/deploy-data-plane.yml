@@ -60,6 +60,18 @@ jobs:
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           echo "GHA_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${GHA_ROLE_NAME}" >> "$GITHUB_ENV"
 
+      - name: Seed runtime secrets in AWS Secrets Manager
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: |
+          aws secretsmanager put-secret-value \
+            --secret-id "circleguard/${NAMESPACE}" \
+            --secret-string "$(jq -nc \
+              --arg dbp  '${{ secrets.DB_PASSWORD }}' \
+              --arg neo  '${{ secrets.NEO4J_PASSWORD || secrets.DB_PASSWORD }}' \
+              --arg ldap '${{ secrets.LDAP_ADMIN_PASSWORD || secrets.DB_PASSWORD }}' \
+              --arg jwt  '${{ secrets.JWT_SECRET }}' \
+              '{DB_USERNAME:"circleguard",DB_PASSWORD:$dbp,NEO4J_USERNAME:"neo4j",NEO4J_PASSWORD:$neo,LDAP_ADMIN_PASSWORD:$ldap,JWT_SECRET:$jwt}')"
+
       - name: Helm lint
         if: ${{ github.event.inputs.action == 'deploy' }}
         run: helm lint "${CHART_DIR}"
@@ -82,8 +94,9 @@ jobs:
       - name: Verify data plane
         if: ${{ github.event.inputs.action == 'deploy' }}
         run: |
+          kubectl wait --for=condition=Ready externalsecret --all -n "${NAMESPACE}" --timeout=120s
           helm status "${RELEASE_NAME}" -n "${NAMESPACE}"
-          kubectl get pods -n "${NAMESPACE}"
+          kubectl get externalsecret,pods -n "${NAMESPACE}"
 
       - name: Uninstall data plane from ${{ env.NAMESPACE }}
         if: ${{ github.event.inputs.action == 'uninstall' }}

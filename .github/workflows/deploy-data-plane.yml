@@ -94,9 +94,28 @@ jobs:
       - name: Verify data plane
         if: ${{ github.event.inputs.action == 'deploy' }}
         run: |
-          kubectl wait --for=condition=Ready externalsecret --all -n "${NAMESPACE}" --timeout=120s
+          echo "── ExternalSecret status (ESO view) ──"
+          kubectl get externalsecret -n "${NAMESPACE}"
+
+          echo "── Each ExternalSecret must produce its target Secret ──"
+          targets=$(kubectl get externalsecret -n "${NAMESPACE}" -o jsonpath='{range .items[*]}{.spec.target.name}{"\n"}{end}')
+          for tgt in $targets; do
+            synced=false
+            for _ in $(seq 1 24); do
+              if kubectl get secret "$tgt" -n "${NAMESPACE}" >/dev/null 2>&1; then
+                synced=true; echo "  ok: $tgt"; break
+              fi
+              sleep 5
+            done
+            if [ "$synced" != true ]; then
+              echo "  MISSING after 120s: $tgt"
+              kubectl describe externalsecret -n "${NAMESPACE}"
+              exit 1
+            fi
+          done
+
           helm status "${RELEASE_NAME}" -n "${NAMESPACE}"
-          kubectl get externalsecret,pods -n "${NAMESPACE}"
+          kubectl get pods -n "${NAMESPACE}"
 
       - name: Uninstall data plane from ${{ env.NAMESPACE }}
         if: ${{ github.event.inputs.action == 'uninstall' }}

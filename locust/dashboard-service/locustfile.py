@@ -14,15 +14,15 @@ class DashboardUser(HttpUser):
     token = None
 
     def on_start(self):
-        resp = self.client.post(
+        with self.client.post(
             "/api/v1/auth/login",
             json={"username": "admin", "password": "admin"},
             catch_response=True
-        )
-        if resp.status_code == 200:
-            self.token = resp.json().get("token")
-        else:
-            resp.failure(f"Login failed: {resp.status_code}")
+        ) as resp:
+            if resp.status_code == 200:
+                self.token = resp.json().get("token")
+            else:
+                resp.failure(f"Login failed: {resp.status_code}")
 
     def _auth_headers(self):
         return {"Authorization": f"Bearer {self.token}"} if self.token else {}

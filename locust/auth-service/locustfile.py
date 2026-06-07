@@ -19,15 +19,15 @@ class AuthUser(HttpUser):
 
     def on_start(self):
         """Authenticate once per simulated user at spawn."""
-        response = self.client.post(
+        with self.client.post(
             "/api/auth/login",
             json={"email": random_user(), "password": "TestPass123!"},
             catch_response=True
-        )
-        if response.status_code == 200:
-            self.token = response.json().get("token")
-        else:
-            response.failure(f"Login failed: {response.status_code}")
+        ) as response:
+            if response.status_code == 200:
+                self.token = response.json().get("token")
+            else:
+                response.failure(f"Login failed: {response.status_code}")
 
     @task(3)
     def validate_token(self):

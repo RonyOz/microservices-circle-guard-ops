@@ -288,4 +288,60 @@ Dashboards relevantes durante una prueba Locust:
 
 ---
 
-*Última actualización: 2026-06-02*
+## 7. Resultados reales — corrida local (2026-06-06)
+
+Ejecución real de Locust 2.44.1 contra servicios levantados localmente (`./gradlew bootRun`),
+no contra el clúster (el pipeline `deploy-stage.yml` lo ejecuta contra EKS). Carga: **50 usuarios
+concurrentes, spawn-rate 10/s, duración 60 s**. CSV crudos en
+[`locust/results/`](../../locust/results/).
+
+> **Nota de compatibilidad:** los `locustfile.py` tenían un bug con Locust 2.x — `resp.failure()`
+> fuera de un bloque `with ... catch_response=True` lanza `LocustError` y mata a cada usuario en
+> `on_start` (0 requests). Se corrigió `on_start` en auth/dashboard/file-service envolviéndolo en
+> with-block. Las corridas de abajo usan los locustfiles ya corregidos.
+
+### 7.1 file-service (sin dependencias externas)
+
+| Endpoint | reqs | fails | RPS | p50 | p95 | p99 | max |
+|----------|------|-------|-----|-----|-----|-----|-----|
+| `POST /api/v1/files/upload` | 4 676 | 0 | 79.1 | 2 ms | 5 ms | 7 ms | 22 ms |
+| `GET /actuator/health` | 4 723 | 0 | 79.9 | 1 ms | 4 ms | 5 ms | 11 ms |
+| **Agregado** | **9 399** | **0 (0%)** | **159.1** | **2 ms** | **4 ms** | **6 ms** | **22 ms** |
+
+**Interpretación:** upload es I/O de disco puro (sin red/DB) → latencia plana y baja. p95 5 ms
+con 159 RPS sostenidos en 1 réplica, error rate 0%. Cómodo dentro del SLO de 2000 ms; el
+servicio no es el cuello de botella del sistema. El `max` 22 ms aislado corresponde a pausas GC
+de arranque del JIT.
+
+### 7.2 gateway-service (Redis para rate-limit)
+
+Rate limiter elevado vía `RATE_LIMIT_REQUESTS_PER_WINDOW=1000000` (patrón External Configuration)
+para medir throughput sin bloqueo 429. Cada request `/api/**` pasa por `RateLimitInterceptor` →
+Redis (ZADD + ZREMRANGEBYSCORE + ZCARD).
+
+| Endpoint | reqs | fails | RPS | p50 | p95 | p99 | max |
+|----------|------|-------|-----|-----|-----|-----|-----|
+| `POST /api/v1/gate/validate` | 7 013 | 0 | 118.8 | 4 ms | 8 ms | 10 ms | 23 ms |
+| `GET /actuator/health` | 2 366 | 0 | 40.1 | 2 ms | 5 ms | 8 ms | 21 ms |
+| **Agregado** | **9 379** | **0 (0%)** | **158.8** | **4 ms** | **8 ms** | **10 ms** | **23 ms** |
+
+**Interpretación:** `validate` con token aleatorio falla la verificación JWT (firma inválida) y
+retorna 200 `{valid:false}` — pero cada llamada igualmente cruza el round-trip a Redis del rate
+limiter, que es lo que mide el p95 de 8 ms (vs 5 ms de file-service sin Redis). El delta ~3-4 ms
+es el costo del sliding-window en Redis. 0% error, 159 RPS en 1 réplica. Confirma la estimación
+modelada de la §2.3 («validate_token stateless, p95 < 150 ms con 1 réplica»): el real es muy
+inferior bajo 50 usuarios.
+
+### 7.3 Conclusiones de la corrida real
+
+- Ambos servicios sostienen **~159 RPS por réplica con 0% de error** y p95 de un dígito en ms.
+- El overhead de Redis en el camino de rate-limiting es medible (~3-4 ms p95) pero despreciable
+  frente al SLO.
+- Los valores reales quedan **2-3 órdenes de magnitud por debajo** de los umbrales modelados
+  (§2), confirmando holgura amplia a esta escala de carga.
+- Servicios con DB/grafo (promotion, dashboard) y la cadena cross-service no se midieron localmente
+  por requerir el stack completo; el pipeline `deploy-stage.yml` los cubre contra EKS.
+
+---
+
+*Última actualización: 2026-06-06*

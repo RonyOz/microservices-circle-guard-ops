@@ -81,6 +81,21 @@ prometheus:
       cpu: 500m
       memory: 512Mi
 
+alertmanager:
+  enabled: true
+  image: prom/alertmanager
+  tag: v0.27.0
+  # Alerts are delivered by email to the in-cluster MailHog (smtp 1025, UI :8025)
+  smtpSmarthost: "mailhog:1025"
+  smtpFrom: "alertmanager@circleguard.edu"
+  emailTo: "oncall@circleguard.edu"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
 grafana:
   enabled: true
   image: grafana/grafana

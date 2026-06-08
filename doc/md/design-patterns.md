@@ -1,13 +1,19 @@
 # Design Patterns
 
-CircleGuard implementa seis patrones de diseño cloud. Tres son patrones de infraestructura/ops; tres son patrones de aplicación. Todos están referenciados en la clasificación estándar de Microsoft Azure Architecture Patterns.
+CircleGuard implementa nueve patrones de diseño cloud, referenciados en la clasificación estándar de Microsoft Azure Architecture Patterns. Se distingue su **procedencia** respecto al Taller 2:
+
+- **Cinco existentes** (heredados del Taller 2): Bulkhead, Publisher/Subscriber, Cache Aside, Gatekeeper, Pipes and Filters. Dos de ellos **mejorados** para el Proyecto Final: Bulkhead (aislamiento de secretos por namespace) y Pipes and Filters (migración Jenkins → GitHub Actions + nuevos filtros de calidad/seguridad).
+- **Cuatro nuevos** (implementados para el Proyecto Final, jun 2026): External Configuration Store, Circuit Breaker, Feature Toggle, Rate Limiting.
+
+Cada sección marca su línea **Procedencia**; el resumen final consolida procedencia y categoría.
 
 ---
 
 ## Patrón 1 — Bulkhead
 
 **Categoría:** Resiliencia  
-**Dónde implementado:** Kubernetes namespace isolation (`microservices-circle-guard-ops`)
+**Dónde implementado:** Kubernetes namespace isolation (`microservices-circle-guard-ops`)  
+**Procedencia:** Existente (Taller 2) · **Mejorado** para Proyecto Final — el pivote a AWS añadió aislamiento de secretos por namespace vía AWS Secrets Manager (`circleguard/{dev,stage,production}`)
 
 ### Definición
 
@@ -60,7 +66,8 @@ Con Bulkhead (CircleGuard):
 ## Patrón 2 — Publisher/Subscriber
 
 **Categoría:** Mensajería / Arquitectura  
-**Dónde implementado:** `circleguard-form-service`, `circleguard-promotion-service`, `circleguard-notification-service` (`microservices-circle-guard-dev`)
+**Dónde implementado:** `circleguard-form-service`, `circleguard-promotion-service`, `circleguard-notification-service` (`microservices-circle-guard-dev`)  
+**Procedencia:** Existente (Taller 2) — flujos Kafka sin cambios estructurales
 
 ### Definición
 
@@ -121,7 +128,8 @@ El publisher (`promotion-service`) no sabe que `notification-service` existe. Si
 ## Patrón 3 — Cache Aside
 
 **Categoría:** Rendimiento  
-**Dónde implementado:** `circleguard-auth-service`, `circleguard-gateway-service`, `circleguard-promotion-service` (`microservices-circle-guard-dev`)
+**Dónde implementado:** `circleguard-auth-service`, `circleguard-gateway-service`, `circleguard-promotion-service` (`microservices-circle-guard-dev`)  
+**Procedencia:** Existente (Taller 2)
 
 ### Definición
 
@@ -178,7 +186,8 @@ Esto es crítico para el NFR de contención: las notificaciones de exposición d
 ## Patrón 4 — External Configuration Store
 
 **Categoría:** Configuración  
-**Dónde implementado:** AWS Secrets Manager + External Secrets Operator + IRSA (`microservices-circle-guard-ops`)
+**Dónde implementado:** AWS Secrets Manager + External Secrets Operator + IRSA (`microservices-circle-guard-ops`)  
+**Procedencia:** **Nuevo** (Proyecto Final, jun 2026) — eleva la inyección de env-vars previa a un Config Store formal: capa ConfigMap (`envFrom`) + cadena SM/ESO incorporada en el pivote a AWS
 
 ### Definición
 
@@ -240,13 +249,11 @@ La configuración no-sensible (DB host, service URLs, puerto) también es extern
 
 Complementando la cadena de secretos, la configuración no-sensible (DB host, service URLs, feature flags) se externaliza vía **Kubernetes ConfigMaps** generados por los Helm charts:
 
+El `templates/configmap.yaml` es genérico (`range .Values.env`); los valores no-sensibles viven en `values.yaml` y se renderizan en el ConfigMap `<fullname>-config`:
+
 ```yaml
-# services/auth-service/chart/templates/configmap.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ include "chart.fullname" . }}-config
-data:
+# services/auth-service/chart/values.yaml — bloque env:
+env:
   DB_HOST: "postgres"
   DB_NAME: "circleguard_auth"
   LDAP_HOST: "openldap"
@@ -272,7 +279,8 @@ envFrom:
 ## Patrón 5 — Gatekeeper
 
 **Categoría:** Seguridad  
-**Dónde implementado:** `circleguard-gateway-service` (`microservices-circle-guard-dev`)
+**Dónde implementado:** `circleguard-gateway-service` (`microservices-circle-guard-dev`)  
+**Procedencia:** Existente (Taller 2)
 
 ### Definición
 
@@ -330,7 +338,8 @@ Un API Gateway hace routing, aggregation, transformación. El Gatekeeper de Circ
 ## Patrón 6 — Pipes and Filters
 
 **Categoría:** Procesamiento / CI/CD  
-**Dónde implementado:** GitHub Actions workflows (`microservices-circle-guard-ops`)
+**Dónde implementado:** GitHub Actions workflows (`microservices-circle-guard-ops`)  
+**Procedencia:** Existente (Taller 2, entonces Jenkins) · **Mejorado** para Proyecto Final — migrado a GitHub Actions y ampliado con filtros de calidad/seguridad (SonarQube, Trivy, OWASP ZAP, approval gate, git-cliff release)
 
 ### Definición
 
@@ -409,7 +418,8 @@ Cada filtro tiene responsabilidad única:
 ## Patrón 7 — Circuit Breaker
 
 **Categoría:** Resiliencia  
-**Dónde implementado:** `circleguard-auth-service` → `identity-service`, `circleguard-dashboard-service` → `promotion-service` (`microservices-circle-guard-dev`)
+**Dónde implementado:** `circleguard-auth-service` → `identity-service`, `circleguard-dashboard-service` → `promotion-service` (`microservices-circle-guard-dev`)  
+**Procedencia:** **Nuevo** (Proyecto Final, 2026-06-02) — Resilience4j no estaba cableado en el Taller 2
 
 ### Definición
 
@@ -513,7 +523,8 @@ management:
 ## Patrón 8 — Feature Toggle
 
 **Categoría:** Extensibilidad / Control  
-**Dónde implementado:** `circleguard-dashboard-service` (`microservices-circle-guard-dev`)
+**Dónde implementado:** `circleguard-dashboard-service` (`microservices-circle-guard-dev`)  
+**Procedencia:** **Nuevo** (Proyecto Final, 2026-06-02)
 
 ### Definición
 
@@ -580,15 +591,72 @@ kubectl rollout restart deployment/dashboard-service -n dev
 
 ---
 
+## Patrón 9 — Rate Limiting
+
+**Categoría:** Resiliencia / Seguridad  
+**Dónde implementado:** `circleguard-gateway-service` (`microservices-circle-guard-dev`)  
+**Procedencia:** **Nuevo** (Proyecto Final, 2026-06-02)
+
+### Definición
+
+Rate Limiting controla cuántas solicitudes puede hacer un cliente en una ventana de tiempo, rechazando el exceso (HTTP 429). Protege los servicios backend de saturación — accidental (bug en un cliente) o maliciosa (DoS, fuerza bruta). Una ventana deslizante (sliding window) cuenta solicitudes en los últimos N segundos en lugar de reiniciar el contador en bloques fijos, evitando ráfagas en el borde de la ventana.
+
+```
+Cliente → [Rate Limiter] → Backend
+            cuenta peticiones en ventana
+            ≤ límite → pasa
+            > límite → 429 Too Many Requests + Retry-After
+```
+
+### Implementación en CircleGuard
+
+`gateway-service` es el punto de entrada del campus (Patrón 5 — Gatekeeper); aquí también limita la tasa por IP de cliente. La implementación usa un **sorted set de Redis** como ventana deslizante (composición natural con el Cache Aside del Patrón 3, mismo Redis):
+
+```java
+// services/circleguard-gateway-service/src/main/java/.../interceptor/RateLimitInterceptor.java
+// key "rl:<ip>" — sorted set, score = timestamp ms
+redisTemplate.opsForZSet().removeRangeByScore(key, 0, windowStart); // poda lo expirado
+redisTemplate.opsForZSet().add(key, UUID.randomUUID().toString(), now); // registra petición
+redisTemplate.expire(key, Duration.ofSeconds(windowSeconds + 1));      // TTL cubre la ventana
+long count = redisTemplate.opsForZSet().zCard(key);
+if (count > requestsPerWindow) {            // excede → 429 + Retry-After
+    response.setStatus(429);
+    response.setHeader("Retry-After", String.valueOf(windowSeconds));
+    return false;
+}
+```
+
+El interceptor se registra vía `WebMvcConfig` (Spring MVC `HandlerInterceptor`). Los parámetros (`window-seconds`, `requests-per-window`) se externalizan en `RateLimiterProperties` — combinable con External Configuration (Patrón 4) para ajustar límites por ambiente sin rebuild. La IP del cliente se resuelve respetando `X-Forwarded-For` (correcto detrás del ALB Ingress).
+
+**Archivos relevantes:**
+- `services/circleguard-gateway-service/src/main/java/.../interceptor/RateLimitInterceptor.java`
+- `services/circleguard-gateway-service/src/main/java/.../config/RateLimiterProperties.java`
+- `services/circleguard-gateway-service/src/main/java/.../config/WebMvcConfig.java` — registra el interceptor
+- `services/circleguard-gateway-service/src/test/java/.../interceptor/RateLimitInterceptorTest.java`
+- `infrastructure/chart/templates/redis.yaml` — Redis como backend del contador
+
+### Beneficios
+
+- Protege backends de saturación accidental o maliciosa antes de que el tráfico llegue a la lógica de negocio
+- Ventana deslizante (sorted set) evita el problema de ráfagas en el borde de ventanas fijas
+- Estado distribuido en Redis: funciona con múltiples réplicas del gateway (no es contador en memoria por-pod)
+- `Retry-After` permite a clientes bien-portados re-intentar de forma educada
+- Límites configurables por ambiente vía External Configuration, sin redeploy de imagen
+
+---
+
 ## Resumen
 
-| # | Patrón | Categoría | Dónde en CircleGuard |
-|---|--------|-----------|----------------------|
-| 1 | Bulkhead | Resiliencia | K8s namespaces dev/stage/production, Helm resource limits |
-| 2 | Publisher/Subscriber | Mensajería | Kafka: form→promotion, promotion→notification |
-| 3 | Cache Aside | Rendimiento | Redis: QR tokens (gateway), health status (promotion) |
-| 4 | External Configuration Store | Configuración | AWS SM + ESO + IRSA → K8s ConfigMaps + Secrets → Spring `envFrom` |
-| 5 | Gatekeeper | Seguridad | gateway-service: validación QR para acceso físico al campus |
-| 6 | Pipes and Filters | Procesamiento | CI/CD pipeline: test → build → push → deploy → verify → smoke |
-| 7 | Circuit Breaker | Resiliencia | auth-service→identity-service, dashboard-service→promotion-service |
-| 8 | Feature Toggle | Extensibilidad | dashboard-service: K-anonimato habilitado/deshabilitado via ConfigMap |
+| # | Patrón | Procedencia | Categoría | Dónde en CircleGuard |
+|---|--------|-------------|-----------|----------------------|
+| 1 | Bulkhead | Existente · mejorado | Resiliencia | K8s namespaces dev/stage/production, Helm resource limits, secretos SM por namespace |
+| 2 | Publisher/Subscriber | Existente | Mensajería | Kafka: form→promotion, promotion→notification |
+| 3 | Cache Aside | Existente | Rendimiento | Redis: QR tokens (gateway), health status (promotion) |
+| 4 | External Configuration Store | **Nuevo** | Configuración | AWS SM + ESO + IRSA → K8s ConfigMaps + Secrets → Spring `envFrom` |
+| 5 | Gatekeeper | Existente | Seguridad | gateway-service: validación QR para acceso físico al campus |
+| 6 | Pipes and Filters | Existente · mejorado | Procesamiento | CI/CD: Jenkins → GitHub Actions + Sonar/Trivy/ZAP/approval/release |
+| 7 | Circuit Breaker | **Nuevo** | Resiliencia | auth-service→identity-service, dashboard-service→promotion-service |
+| 8 | Feature Toggle | **Nuevo** | Extensibilidad | dashboard-service: K-anonimato habilitado/deshabilitado via ConfigMap |
+| 9 | Rate Limiting | **Nuevo** | Resiliencia / Seguridad | gateway-service: ventana deslizante por IP vía Redis sorted set, HTTP 429 |
+
+**Procedencia consolidada:** 5 existentes (Taller 2) — 2 de ellos mejorados (Bulkhead, Pipes and Filters) — + 4 nuevos (Proyecto Final): External Configuration Store, Circuit Breaker, Feature Toggle, Rate Limiting.

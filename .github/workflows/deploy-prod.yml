@@ -139,28 +139,18 @@ jobs:
         env:
           OUTPUT: release-notes.md
 
-      - name: Create GitHub Release (ops repo)
+      # Deployment record in the OPS repo only. The dev repo's versioning and
+      # GitHub Release are owned by release-please (release.yml) — creating a dev
+      # release here too would collide with it (duplicate tag/release).
+      - name: Create deployment release (ops repo)
         run: |
           VERSION="${{ github.event.client_payload.version }}"
           gh release create "v${VERSION}" \
-            --title "Release v${VERSION} — ${{ github.event.client_payload.service }}" \
+            --title "Deploy v${VERSION} — ${{ github.event.client_payload.service }}" \
             --notes-file release-notes.md \
             || echo "Release v${VERSION} already exists, skipping"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create GitHub Release in dev repo
-        if: ${{ github.event.client_payload.version != '' }}
-        run: |
-          VERSION="${{ github.event.client_payload.version }}"
-          gh release create "v${VERSION}" \
-            --repo RonyOz/microservices-circle-guard-dev \
-            --title "v${VERSION}" \
-            --notes-file release-notes.md \
-            --target ${{ github.event.client_payload.git_commit }} \
-            2>/dev/null || echo "Release v${VERSION} already exists in dev repo, skipping"
-        env:
-          GH_TOKEN: ${{ secrets.OPS_REPO_TOKEN }}
 
   notify-failure:
     runs-on: ubuntu-latest

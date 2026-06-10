@@ -83,14 +83,39 @@ jobs:
         run: |
           SERVICE="${{ github.event.client_payload.service }}"
           SVC_PORT=$(kubectl get svc "$SERVICE" -n "$K8S_NAMESPACE" -o jsonpath='{.spec.ports[0].port}')
-          # nohup + redirect so the process survives the step boundary (a bare
-          # `&` dies with SIGPIPE when this step's stdout pipe closes).
-          nohup kubectl port-forward -n "$K8S_NAMESPACE" "svc/$SERVICE" "18080:$SVC_PORT" >/tmp/pf.log 2>&1 &
-          echo $! > /tmp/pf.pid
-          # wait for port-forward to be ready
-          for i in $(seq 1 15); do
-            curl -sf http://localhost:18080/actuator/health && break || sleep 2
+
+          # Forward to an explicit, newest Ready pod. Right after a rolling
+          # upgrade (maxSurge: 0) the old pod is still Terminating and
+          # `port-forward svc/...` can resolve to it, leaving the tunnel
+          # pointing at a dying pod (all requests then fail with 000).
+          for attempt in 1 2 3; do
+            POD=$(kubectl get pods -n "$K8S_NAMESPACE" \
+              -l "app.kubernetes.io/name=$SERVICE" \
+              --field-selector=status.phase=Running \
+              --sort-by=.metadata.creationTimestamp \
+              -o jsonpath='{.items[-1].metadata.name}')
+            echo "Attempt $attempt: forwarding to pod $POD"
+            # nohup + redirect so the process survives the step boundary (a bare
+            # `&` dies with SIGPIPE when this step's stdout pipe closes).
+            nohup kubectl port-forward -n "$K8S_NAMESPACE" "pod/$POD" "18080:$SVC_PORT" >/tmp/pf.log 2>&1 &
+            echo $! > /tmp/pf.pid
+            for i in $(seq 1 10); do
+              if curl -sf http://localhost:18080/actuator/health >/dev/null; then
+                echo "Port-forward ready (pod $POD)"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "Port-forward not responding, retrying with a fresh pod resolution..."
+            kill "$(cat /tmp/pf.pid)" 2>/dev/null || true
+            sleep 2
           done
+
+          echo "::error::Port-forward to $SERVICE never became ready"
+          echo "--- /tmp/pf.log ---"; cat /tmp/pf.log || true
+          echo "--- pods ---"; kubectl get pods -n "$K8S_NAMESPACE" -l "app.kubernetes.io/name=$SERVICE" -o wide
+          echo "--- endpoints ---"; kubectl get endpoints "$SERVICE" -n "$K8S_NAMESPACE" -o yaml | tail -20
+          exit 1
 
       - name: E2E tests
         run: |

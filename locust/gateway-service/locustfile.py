@@ -18,5 +18,8 @@ class GateUser(HttpUser):
             json=payload,
             catch_response=True
         ) as resp:
-            if resp.status_code not in (200, 401, 403):
+            # 429 is expected under load: every virtual user shares one client IP
+            # via port-forward, so they hit the same rate-limit bucket. A 429 means
+            # the limiter is working, not that the service failed.
+            if resp.status_code not in (200, 401, 403, 429):
                 resp.failure(f"Unexpected status: {resp.status_code}")

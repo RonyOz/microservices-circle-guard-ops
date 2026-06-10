@@ -30,7 +30,7 @@ El repositorio de aplicación maneja 8 microservicios con features que se desarr
 |------|--------|-----------|------------|-----------|
 | Feature | `feature/<historia>` | `develop` | `develop` | Nueva funcionalidad por historia de usuario |
 | Hotfix | `hotfix/<descripción>` | `main` | `main` + `develop` | Corrección urgente en producción |
-| Release | `release/<version>` | `develop` | `main` + `develop` | Preparación de release (bumps de versión, docs) |
+| Release | `release/<descriptor>` | `develop` | `main` + `develop` | Promoción a stage y luego a producción. **El nombre NO lleva versión** — la versión la determina release-please en `main` (ver "Versioning"). Efímera: se elimina tras el merge a `main` |
 
 ### Flujo de una feature nueva
 
@@ -47,16 +47,21 @@ develop
   │                          (E2E + Locust en stage namespace)
   │
   ├── (cuando listo para release)
-  │   release/1.3.0 nace desde develop
-  │        │  (version bump, changelog draft)
+  │   release/candidate nace desde develop
+  │        │  (estabilización; SIN bump manual de versión)
+  │        ▼
+  │   push a release/* ──→ deploy-stage.yml dispara (E2E + ZAP + Locust en stage)
+  │        │
   │        ▼
   │   PR: release/* → main
   │        │  (aprobación manual requerida)
   │        ▼
-  │   merge a main ──→ deploy-prod.yml dispara
-  │                      (--atomic + GitHub Release con git-cliff)
+  │   merge a main ──→ deploy-prod.yml dispara (--atomic)
+  │                ──→ release-please abre/actualiza el release-PR y, al mergearlo,
+  │                    publica el tag vN + GitHub Release (notas) en el dev repo
+  │                ──→ git-cliff registra el despliegue en el ops repo
   │        │
-  │        └──→ back-merge release/* → develop
+  │        └──→ borrar release/* (efímera); back-merge no necesario si squash a develop
 ```
 
 ### Flujo de un hotfix urgente
@@ -84,7 +89,7 @@ main (producción rota)
 feature/us-01-qr-campus-checkin
 feature/us-03-health-survey-submission
 hotfix/promotion-kafka-null-pointer
-release/1.4.0
+release/candidate          # sin versión en el nombre — release-please la calcula
 ```
 
 ### Commit message convention
@@ -101,7 +106,23 @@ Todos los commits siguen **Conventional Commits** (`<type>(<scope>): <descriptio
 | `test` | Agregar o actualizar tests |
 | `perf` | Mejoras de performance |
 
-`git-cliff` en el ops repo parsea estos tipos para generar el CHANGELOG automático en cada GitHub Release de producción.
+**release-please** (dev repo) parsea estos tipos para calcular la versión y generar las notas del GitHub Release. **git-cliff** (ops repo) los parsea para el registro de despliegue del ops repo. Ver "Versioning".
+
+### Versioning (release-please es la autoridad)
+
+La versión la gestiona automáticamente **release-please** en `main`, calculándola desde los conventional commits acumulados desde el último release:
+
+| Commit | Bump |
+|--------|------|
+| `fix:` | patch (`1.0.0 → 1.0.1`) |
+| `feat:` | minor (`1.0.0 → 1.1.0`) |
+| `feat!:` / `BREAKING CHANGE:` | major (`1.0.0 → 2.0.0`) |
+
+Reglas:
+- **Las ramas `release/*` NO llevan la versión en el nombre.** Son ramas efímeras de promoción (a stage primero, luego a prod vía merge a `main`). El número de versión lo decide release-please, no el nombre de la rama — así no hay dos fuentes de verdad.
+- La versión canónica es el **tag `vN` + GitHub Release** que release-please publica al mergear su *release-PR* en `main` (dev repo).
+- Para **fijar una versión puntual** (override), añade `Release-As: x.y.z` en el cuerpo de un commit del PR a `main`.
+- `git-cliff` en `deploy-prod.yml` crea **solo** el registro de despliegue en el **ops repo** (que no usa release-please). No duplica el release del dev repo.
 
 ### PR policy (dev repo)
 
@@ -187,7 +208,7 @@ Para el dev repo, aplicar la misma protección también a `develop`.
 |---------|-------------------|----------------|
 | Ramas permanentes | `main`, `develop` | `main` |
 | Feature lifetime | Semanas (por sprint) | Máx 2 días |
-| Release process | `release/*` branch + tag | Directo en `main` |
+| Release process | `release/<descriptor>` efímera (sin versión en nombre) → stage → `main` | Directo en `main` |
 | Hotfix | `hotfix/*` desde `main` | `fix/*` desde `main` |
-| Trigger de deploy | merge a `develop` → stage; merge a `main` → prod | merge a `main` → deploy via `repository_dispatch` |
-| Versioning | SemVer tags en `main` | Sin versioning propio — versiona servicios |
+| Trigger de deploy | push `release/*` → stage; merge a `main` → prod | merge a `main` → deploy via `repository_dispatch` |
+| Versioning | release-please en `main` (SemVer desde conventional commits); `Release-As:` para override | Sin versioning propio — versiona servicios |

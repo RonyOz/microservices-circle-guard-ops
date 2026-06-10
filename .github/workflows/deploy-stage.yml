@@ -203,19 +203,22 @@ jobs:
           PF_PIDS=()
           for SVC in "${!SVCS[@]}"; do
             LOCAL="${SVCS[$SVC]}"
-            if kubectl get svc "$SVC" -n "$NS" &>/dev/null; then
-              SVCPORT=$(kubectl get svc "$SVC" -n "$NS" -o jsonpath='{.spec.ports[0].port}')
-              kubectl port-forward -n "$NS" "svc/$SVC" "${LOCAL}:${SVCPORT}" &>/dev/null &
-              PF_PIDS+=($!)
+            kubectl get svc "$SVC" -n "$NS" &>/dev/null || { echo "skip $SVC (not deployed)"; continue; }
+            # Wait for a Ready pod, then forward to that pod (not svc/). Forwarding
+            # to svc/ right after a rolling upgrade can hit an empty/terminating
+            # endpoint, which surfaces downstream as HTTP 000.
+            if ! kubectl wait --for=condition=ready pod -l "app.kubernetes.io/name=$SVC" -n "$NS" --timeout=120s; then
+              echo "::warning::$SVC never became Ready — its cross-service flow may fail"
+              continue
             fi
+            SVCPORT=$(kubectl get svc "$SVC" -n "$NS" -o jsonpath='{.spec.ports[0].port}')
+            POD=$(kubectl get pods -n "$NS" -l "app.kubernetes.io/name=$SVC" \
+              --field-selector=status.phase=Running --sort-by=.metadata.creationTimestamp \
+              -o jsonpath='{.items[-1].metadata.name}')
+            nohup kubectl port-forward -n "$NS" "pod/$POD" "${LOCAL}:${SVCPORT}" &>/dev/null &
+            PF_PIDS+=($!)
           done
           sleep 5
-          for SVC in "${!SVCS[@]}"; do
-            LOCAL="${SVCS[$SVC]}"
-            for i in $(seq 1 6); do
-              curl -sf "http://localhost:${LOCAL}/actuator/health" &>/dev/null && break || sleep 2
-            done
-          done
           chmod +x e2e/cross-service/e2e.sh
           AUTH_URL=http://localhost:18081 \
           IDENTITY_URL=http://localhost:18082 \

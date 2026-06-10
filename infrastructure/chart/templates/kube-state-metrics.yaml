@@ -1,0 +1,110 @@
+{{- if .Values.kubeStateMetrics.enabled }}
+# kube-state-metrics: exposes kube_* metrics (pod resource requests, HPA state,
+# node info) consumed by the FinOps Grafana dashboard. Scraped by the dedicated
+# 'kube-state-metrics' Prometheus job (honor_labels: true) — do NOT add the
+# prometheus.io/scrape pod annotation here, or the kubernetes-pods job would
+# scrape it too and clobber the per-pod `namespace` label.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-state-metrics
+  labels:
+    app.kubernetes.io/name: kube-state-metrics
+    circleguard/component: observability
+---
+# Cluster-scoped names are suffixed with the release namespace so the chart can
+# be installed once per environment namespace without collisions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kube-state-metrics-{{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kube-state-metrics
+    circleguard/component: observability
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "namespaces"]
+    verbs: ["list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-state-metrics-{{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kube-state-metrics
+    circleguard/component: observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-state-metrics-{{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: kube-state-metrics
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-state-metrics
+  labels:
+    app.kubernetes.io/name: kube-state-metrics
+    circleguard/component: observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube-state-metrics
+    spec:
+      serviceAccountName: kube-state-metrics
+      containers:
+        - name: kube-state-metrics
+          image: {{ .Values.kubeStateMetrics.image }}
+          args:
+            # Only the collectors the FinOps dashboard needs — keeps cardinality low
+            - --resources=pods,nodes,namespaces,deployments,replicasets,horizontalpodautoscalers
+          ports:
+            - name: http-metrics
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-state-metrics
+  labels:
+    app.kubernetes.io/name: kube-state-metrics
+    circleguard/component: observability
+spec:
+  selector:
+    app.kubernetes.io/name: kube-state-metrics
+  ports:
+    - name: http-metrics
+      port: 8080
+      targetPort: 8080
+{{- end }}

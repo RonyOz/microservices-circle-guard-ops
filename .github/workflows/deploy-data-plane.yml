@@ -60,6 +60,15 @@ jobs:
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           echo "GHA_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${GHA_ROLE_NAME}" >> "$GITHUB_ENV"
 
+      # metrics-server is cluster-scoped (kube-system) and idempotent to re-apply.
+      # EKS does not ship it by default; without it the gateway/auth HPAs stay at
+      # <unknown> and never scale (FinOps bonus).
+      - name: Install metrics-server (required by HPA)
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: |
+          kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.7.2/components.yaml
+          kubectl -n kube-system rollout status deployment/metrics-server --timeout=120s
+
       - name: Seed runtime secrets in AWS Secrets Manager
         if: ${{ github.event.inputs.action == 'deploy' }}
         run: |

@@ -169,3 +169,9 @@ sonarqube:
     limits:
       cpu: 1000m
       memory: 2Gi
+
+# kube-state-metrics — feeds kube_* metrics (resource requests, HPA state,
+# node count) to the FinOps Grafana dashboard.
+kubeStateMetrics:
+  enabled: true
+  image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0

@@ -44,6 +44,14 @@ data:
             target_label: app
           - source_labels: [__meta_kubernetes_namespace]
             target_label: namespace
+{{- if .Values.kubeStateMetrics.enabled }}
+      # kube-state-metrics exposes its own namespace/pod labels per metric;
+      # honor_labels keeps them instead of overwriting with the scrape target's.
+      - job_name: 'kube-state-metrics'
+        honor_labels: true
+        static_configs:
+          - targets: ['kube-state-metrics:8080']
+{{- end }}
   rules.yml: |
     groups:
       - name: circleguard.alerts

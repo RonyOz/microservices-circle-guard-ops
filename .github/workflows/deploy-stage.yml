@@ -94,6 +94,14 @@ jobs:
           SERVICE="${{ github.event.client_payload.service }}"
           SVC_PORT=$(kubectl get svc "$SERVICE" -n "$K8S_NAMESPACE" -o jsonpath='{.spec.ports[0].port}')
 
+          # Wait for a Ready pod before forwarding. helm --wait can return on a
+          # rolling-update edge while the new pod is still binding its port
+          # (promotion-service takes ~60s to start: Neo4j + JPA + Kafka + Flyway).
+          # Readiness == ACCEPTING_TRAFFIC, which only happens after Tomcat binds,
+          # so this guarantees the tunnel will connect.
+          kubectl wait --for=condition=ready pod \
+            -l "app.kubernetes.io/name=$SERVICE" -n "$K8S_NAMESPACE" --timeout=180s
+
           # Also forward auth-service so e2e scripts can obtain a JWT.
           # If it isn't deployed the scripts SKIP their authenticated checks.
           if [ "$SERVICE" != "auth-service" ] && kubectl get svc auth-service -n "$K8S_NAMESPACE" >/dev/null 2>&1; then

@@ -40,7 +40,9 @@ echo "=== E2E: file-service ==="
 check_any "Health endpoint"           GET  "/actuator/health"         "200 503"
 check     "Upload: no file sent"       POST "/api/v1/files/upload"     "400"
 
-TOKEN=$(curl -s -X POST "${GATEWAY_URL:-http://localhost:8086}/api/v1/auth/login" \
+# Token comes from auth-service (forwarded by the workflow as AUTH_URL).
+# If auth-service isn't reachable the authenticated checks SKIP gracefully.
+TOKEN=$(curl -s -X POST "${AUTH_URL:-http://localhost:18081}/api/v1/auth/login" \
     -H 'Content-Type: application/json' \
     -d '{"username":"staff_guard","password":"password"}' \
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || echo "")
@@ -51,13 +53,13 @@ if [ -n "$TOKEN" ]; then
     TMPFILE=$(mktemp /tmp/e2e-cert-XXXXXX.pdf)
     echo "%PDF-1.4 e2e-test-certificate" > "$TMPFILE"
 
-    check_any "Upload: valid certificate" POST "/api/v1/files/upload" "200 201 400" \
+    check_any "Upload: valid certificate" POST "/api/v1/files/upload" "200 201" \
         -H "Authorization: Bearer $TOKEN" \
         -F "file=@${TMPFILE};type=application/pdf"
 
     rm -f "$TMPFILE"
 else
-    echo "  SKIP  Authenticated upload — no token from gateway"
+    echo "  SKIP  Authenticated upload — auth-service not reachable (AUTH_URL)"
 fi
 
 echo "--- Results: $PASS passed, $FAIL failed ---"

@@ -49,5 +49,11 @@ else
     FAIL=$((FAIL+1))
 fi
 
+check "Survey without anonymousId rejected"  POST "/api/v1/surveys" "400" \
+    -H 'Content-Type: application/json' \
+    -d '{"hasFever":true,"hasCough":true}'
+
+check "Questionnaires: list active"          GET  "/api/v1/questionnaires/active" "200"
+
 echo "--- Results: $PASS passed, $FAIL failed ---"
 [ "$FAIL" -eq 0 ]

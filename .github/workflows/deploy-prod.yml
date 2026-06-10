@@ -153,8 +153,11 @@ jobs:
       - name: Create deployment release (ops repo)
         run: |
           VERSION="${{ github.event.client_payload.version }}"
+          # Title is version/environment-scoped, NOT per-service: deploy-prod runs
+          # once per dispatched service, but the release tag vN represents the whole
+          # production rollout. The first service creates it; the rest skip.
           gh release create "v${VERSION}" \
-            --title "Deploy v${VERSION} — ${{ github.event.client_payload.service }}" \
+            --title "Production deploy v${VERSION}" \
             --notes-file release-notes.md \
             || echo "Release v${VERSION} already exists, skipping"
         env:

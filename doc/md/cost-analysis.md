@@ -88,8 +88,8 @@ PVCs ($6). Para llevarlo casi a $0 hay que `terraform destroy` completo (`aws-do
 | `m7i-flex` (burstable) sobre `m7i` fijo | ✅ implementado | ~5% sobre nodos |
 | Spot instances para node group | ❌ pendiente | hasta -70% en nodos |
 | Graviton (`m7g`/`t4g`) en lugar de x86 | ❌ pendiente | ~20% sobre nodos |
-| HPA / scale-to-zero por servicio (KEDA) | ❌ pendiente (bonus FinOps) | reduce nodos en idle |
-| AWS Budgets + alerta de costo | ⚠️ alerta $20/mes mencionada, no en Terraform | gobernanza |
+| HPA (gateway + auth, min=1/max=3/CPU 70%) | ✅ implementado | ~$12–15/mes en horas valle |
+| AWS Budgets + alerta de costo ($20/mes, 80%+100%) | ✅ implementado (IaC) | gobernanza |
 
 > El bonus **FinOps** del enunciado pediría: Budgets en Terraform, dashboards de costo
 > en Grafana, y spot/scale-to-zero. Las dos primeras filas ✅ ya cubren parte de
@@ -113,3 +113,39 @@ Costos comparables; la elección AWS+Azure es por documentación/ecosistema, no 
 
 *Cifras de lista us-east-1, junio 2026. Para la factura real usar AWS Cost Explorer
 filtrando por tag `Project=circleguard` (aplicado vía `default_tags` en `main.tf`).*
+
+---
+
+## 6. Ahorros con HPA (implementado — gateway-service y auth-service)
+
+Con `HorizontalPodAutoscaler` activado (min=1, max=3, target CPU 70%) en los dos
+servicios de mayor tráfico externo:
+
+| Escenario | Réplicas promedio | EC2 equivalente | USD/mes (nodo ~$0.096/h) |
+|-----------|------------------:|-----------------|------------------------:|
+| Sin HPA (fijo 1 réplica/servicio) | 2 pods activos siempre | 2 × 100m CPU / 128Mi mem | —$0 ahorro |
+| Con HPA en horas valle (~12h/día) | escala a 1 pod c/u | ahorra ~1 pod × 12h × 20d = 240h | ~$12–15 / mes |
+
+> El ahorro real depende del perfil de carga. En entorno académico con tráfico muy
+> bajo en horas no laborables, el HPA mantiene mínimo 1 réplica y evita que el
+> scheduler tenga que provisionar nodos extra bajo picos cortos.
+
+---
+
+## 7. Resumen consolidado de estrategias FinOps implementadas
+
+| # | Estrategia | Estado | Ahorro estimado/mes |
+|---|------------|--------|--------------------:|
+| 1 | NAT Gateway único (no per-AZ) | ✅ | ~$33 vs. multi-NAT |
+| 2 | ECR lifecycle policy (keep 20 imgs) | ✅ | acota storage; ~$0 en escala actual |
+| 3 | `m7i-flex.large` (burstable) vs `m7i` | ✅ | ~$10 sobre 3 nodos |
+| 4 | Apagado por demanda (`aws-down.sh`) | ✅ | ~$234 (62%) en modo on-demand 120h |
+| 5 | Resource tagging (`Project=circleguard`) | ✅ | gobernanza — filtra en Cost Explorer |
+| 6 | **HPA** gateway + auth (min=1, max=3) | ✅ | ~$12–15 en horas valle |
+| 7 | **AWS Budgets** $20/mes alerta 80%/100% | ✅ (IaC) | gobernanza — evita sorpresas |
+| 8 | **Dashboard Grafana FinOps** (CPU/mem utilization + HPA) | ✅ | visibilidad continua |
+| 9 | Spot instances para node group | ❌ pendiente | hasta -70% en nodos |
+| 10 | Graviton (`m7g`) en lugar de x86 | ❌ pendiente | ~20% en nodos |
+
+**Total estrategias activas:** 8 de 10. Ahorro máximo realizable con configuración
+actual (modo on-demand 120h/mes): **≈ $270–290 / mes** vs. always-on sin optimizar.

@@ -15,18 +15,29 @@ trap cleanup INT TERM
 
 echo "[port-forward] namespace=$NS"
 
-kubectl -n "$NS" port-forward svc/grafana    3000:3000   >/dev/null 2>&1 &
-kubectl -n "$NS" port-forward svc/prometheus 9090:9090   >/dev/null 2>&1 &
-kubectl -n "$NS" port-forward svc/jaeger     16686:16686 >/dev/null 2>&1 &
-kubectl -n "$NS" port-forward svc/mailhog    8025:8025   >/dev/null 2>&1 &
+kubectl -n "$NS" port-forward svc/grafana      3000:3000   >/dev/null 2>&1 &
+kubectl -n "$NS" port-forward svc/prometheus   9090:9090   >/dev/null 2>&1 &
+kubectl -n "$NS" port-forward svc/jaeger       16686:16686 >/dev/null 2>&1 &
+kubectl -n "$NS" port-forward svc/mailhog      8025:8025   >/dev/null 2>&1 &
+
+if kubectl -n "$NS" get svc kibana &>/dev/null; then
+    kubectl -n "$NS" port-forward svc/kibana    5601:5601   >/dev/null 2>&1 &
+fi
+if kubectl -n "$NS" get svc elasticsearch &>/dev/null; then
+    kubectl -n "$NS" port-forward svc/elasticsearch 9200:9200 >/dev/null 2>&1 &
+fi
 
 sleep 2
 echo
 echo "[port-forward] tuneles activos:"
-echo "  Grafana:     http://localhost:3000"
-echo "  Prometheus:  http://localhost:9090"
-echo "  Jaeger:      http://localhost:16686"
-echo "  MailHog:     http://localhost:8025"
+echo "  Grafana:        http://localhost:3000"
+echo "  Prometheus:     http://localhost:9090"
+echo "  Jaeger:         http://localhost:16686"
+echo "  MailHog:        http://localhost:8025"
+if kubectl -n "$NS" get svc kibana &>/dev/null; then
+    echo "  Kibana:         http://localhost:5601"
+    echo "  Elasticsearch:  http://localhost:9200"
+fi
 echo
 echo "[port-forward] Ctrl+C para cerrar todos."
 wait

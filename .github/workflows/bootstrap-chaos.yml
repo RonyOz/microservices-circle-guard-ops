@@ -1,0 +1,65 @@
+name: Bootstrap Chaos Mesh
+
+# CLUSTER-LEVEL, run ONCE per cluster (mirror of bootstrap-eso.yml).
+# Installs the Chaos Mesh operator + CRDs used by chaos-experiments.yml.
+# Experiments themselves are namespaced manifests under chaos/experiments/
+# and only ever target the stage namespace.
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER_NAME: circleguard-eks
+  CHAOS_MESH_VERSION: 2.7.3
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Install Chaos Mesh
+        run: |
+          helm repo add chaos-mesh https://charts.chaos-mesh.org
+          helm repo update
+          # EKS nodes run containerd — the daemon must talk to its socket,
+          # not the dockershim default.
+          helm upgrade --install chaos-mesh chaos-mesh/chaos-mesh \
+            --namespace chaos-mesh \
+            --create-namespace \
+            --version ${{ env.CHAOS_MESH_VERSION }} \
+            --set chaosDaemon.runtime=containerd \
+            --set chaosDaemon.socketPath=/run/containerd/containerd.sock \
+            --set controllerManager.replicaCount=1 \
+            --set controllerManager.resources.requests.cpu=25m \
+            --set controllerManager.resources.requests.memory=128Mi \
+            --set chaosDaemon.resources.requests.cpu=25m \
+            --set chaosDaemon.resources.requests.memory=128Mi \
+            --set dashboard.resources.requests.cpu=25m \
+            --set dashboard.resources.requests.memory=128Mi \
+            --wait --timeout 5m
+
+      - name: Verify installation
+        run: |
+          kubectl get pods -n chaos-mesh
+          echo "--- CRDs required by chaos/experiments/ ---"
+          for crd in podchaos networkchaos stresschaos; do
+            kubectl get crd "${crd}.chaos-mesh.org" >/dev/null
+            echo "OK  ${crd}.chaos-mesh.org"
+          done
+          echo ""
+          echo "Dashboard (demo): kubectl port-forward -n chaos-mesh svc/chaos-dashboard 2333:2333"

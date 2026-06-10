@@ -1,0 +1,34 @@
+# Experiment 2 — Network partition
+# Cuts traffic between dashboard-service and promotion-service (both ways).
+# Expected: PromotionClient calls time out (2s connect / 3s read), the
+# resilience4j breaker "promotionService" opens after >=50% failures in its
+# COUNT_BASED window, dashboard keeps answering 200 with the degraded
+# fallback body, and the CircuitBreakerOpen Prometheus alert fires.
+# duration auto-reverts the partition; the breaker then closes on its own
+# via HALF_OPEN probes — no manual cleanup required.
+#
+# Note: the project tracker originally suggested partitioning
+# promotion -> notification, but that path is Kafka (no circuit breaker
+# applies). dashboard -> promotion is the real HTTP path guarded by a breaker.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: partition-dashboard-promotion
+  namespace: stage
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - stage
+    labelSelectors:
+      app.kubernetes.io/name: dashboard-service
+  direction: both
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - stage
+      labelSelectors:
+        app.kubernetes.io/name: promotion-service
+  duration: 5m

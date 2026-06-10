@@ -1,0 +1,17 @@
+# Experiment 1 — Pod failure
+# Kills one promotion-service pod in stage. Expected: the Deployment replaces
+# it and readiness gates traffic until the new pod is up; the ServiceDown
+# alert (for: 2m) must NOT fire because recovery completes well under 2 min.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill-promotion
+  namespace: stage
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - stage
+    labelSelectors:
+      app.kubernetes.io/name: promotion-service

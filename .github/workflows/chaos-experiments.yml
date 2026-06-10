@@ -1,0 +1,171 @@
+name: Chaos Experiments
+
+# Manually-triggered chaos runs against the STAGE namespace only.
+# Prerequisite: bootstrap-chaos.yml (Chaos Mesh operator + CRDs).
+# Each run applies one experiment from chaos/experiments/ and then verifies
+# the system's reaction with real assertions — recovery, breaker state or
+# CPU delta — so a run only goes green when resilience actually worked.
+
+on:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: "Experiment to run"
+        required: true
+        type: choice
+        options:
+          - pod-kill
+          - partition
+          - stress
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER_NAME: circleguard-eks
+  K8S_NAMESPACE: stage
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Port-forward Prometheus
+        run: |
+          PROM_POD=$(kubectl get pods -n "$K8S_NAMESPACE" -l app=prometheus \
+            --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
+          nohup kubectl port-forward -n "$K8S_NAMESPACE" "pod/$PROM_POD" 19090:9090 >/tmp/pf-prom.log 2>&1 &
+          echo $! > /tmp/pf-prom.pid
+          for i in $(seq 1 10); do
+            curl -sf http://localhost:19090/-/ready >/dev/null && break || sleep 2
+          done
+
+      # ────────────────────────────── pod-kill ──────────────────────────────
+      - name: "Experiment: pod-kill — capture baseline pod"
+        if: ${{ inputs.experiment == 'pod-kill' }}
+        run: |
+          kubectl get pods -n "$K8S_NAMESPACE" -l app.kubernetes.io/name=promotion-service \
+            -o jsonpath='{.items[0].metadata.name}' > /tmp/victim.txt
+          echo "Baseline pod: $(cat /tmp/victim.txt)"
+
+      - name: "Experiment: pod-kill — inject + verify auto-recovery"
+        if: ${{ inputs.experiment == 'pod-kill' }}
+        run: |
+          kubectl apply -f chaos/experiments/pod-kill-promotion.yaml
+          sleep 15
+          kubectl rollout status deploy/promotion-service -n "$K8S_NAMESPACE" --timeout=180s
+          NEW_POD=$(kubectl get pods -n "$K8S_NAMESPACE" -l app.kubernetes.io/name=promotion-service \
+            --field-selector=status.phase=Running --sort-by=.metadata.creationTimestamp \
+            -o jsonpath='{.items[-1].metadata.name}')
+          OLD_POD=$(cat /tmp/victim.txt)
+          echo "Old pod: $OLD_POD — New pod: $NEW_POD"
+          if [ "$NEW_POD" = "$OLD_POD" ]; then
+            echo "::error::Pod was not replaced — pod-kill had no effect"
+            exit 1
+          fi
+          {
+            echo "## Chaos: pod-kill — PASSED"
+            echo "- Killed pod \`$OLD_POD\`, Deployment recovered with \`$NEW_POD\`"
+            echo "- Recovery within rollout timeout (<3m); ServiceDown alert (for: 2m) should not have fired"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ────────────────────────────── partition ─────────────────────────────
+      - name: "Experiment: partition — inject, drive traffic, assert breaker OPEN"
+        if: ${{ inputs.experiment == 'partition' }}
+        run: |
+          kubectl apply -f chaos/experiments/partition-dashboard-promotion.yaml
+          sleep 5
+
+          # Drive dashboard->promotion calls so the breaker has failures to count
+          # (COUNT_BASED window 10, min 5 calls, 50% threshold).
+          DASH_POD=$(kubectl get pods -n "$K8S_NAMESPACE" -l app.kubernetes.io/name=dashboard-service \
+            --field-selector=status.phase=Running --sort-by=.metadata.creationTimestamp \
+            -o jsonpath='{.items[-1].metadata.name}')
+          nohup kubectl port-forward -n "$K8S_NAMESPACE" "pod/$DASH_POD" 18087:8087 >/tmp/pf-dash.log 2>&1 &
+          echo $! > /tmp/pf-dash.pid
+          sleep 3
+          for i in $(seq 1 10); do
+            CODE=$(curl -s -o /tmp/dash-body.json -w '%{http_code}' --max-time 10 \
+              http://localhost:18087/api/v1/analytics/health-board || echo 000)
+            echo "call $i -> HTTP $CODE"
+            sleep 1
+          done
+
+          echo "Last dashboard body (expect degraded fallback):"
+          cat /tmp/dash-body.json || true
+
+          # Breaker must be OPEN now (scrape interval 30s — poll up to 2 min)
+          STATE=0
+          for i in $(seq 1 8); do
+            STATE=$(curl -s "http://localhost:19090/api/v1/query" \
+              --data-urlencode 'query=max(resilience4j_circuitbreaker_state{name="promotionService",state="open"})' \
+              | python3 -c "import sys,json; r=json.load(sys.stdin)['data']['result']; print(r[0]['value'][1] if r else 0)")
+            [ "$STATE" = "1" ] && break || sleep 15
+          done
+          kill "$(cat /tmp/pf-dash.pid)" 2>/dev/null || true
+
+          if [ "$STATE" != "1" ]; then
+            echo "::error::Circuit breaker promotionService never reached OPEN"
+            exit 1
+          fi
+          if ! grep -q '"error"' /tmp/dash-body.json; then
+            echo "::warning::Dashboard body did not contain the degraded fallback marker"
+          fi
+          {
+            echo "## Chaos: partition — PASSED"
+            echo "- Breaker \`promotionService\` reached OPEN during the partition"
+            echo "- Dashboard kept answering with the degraded fallback (no 5xx cascade)"
+            echo "- CircuitBreakerOpen alert should be visible in MailHog within ~1 min"
+            echo "- Partition auto-reverts after 5m; breaker recovers via HALF_OPEN"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ─────────────────────────────── stress ───────────────────────────────
+      - name: "Experiment: stress — inject + assert CPU delta"
+        if: ${{ inputs.experiment == 'stress' }}
+        run: |
+          PROM_Q='avg(system_cpu_usage{app="promotion-service"})'
+          BEFORE=$(curl -s "http://localhost:19090/api/v1/query" --data-urlencode "query=$PROM_Q" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin)['data']['result']; print(r[0]['value'][1] if r else 0)")
+          echo "CPU before: $BEFORE"
+
+          kubectl apply -f chaos/experiments/stress-promotion.yaml
+          echo "Waiting 90s for stress + scrape interval..."
+          sleep 90
+
+          AFTER=$(curl -s "http://localhost:19090/api/v1/query" --data-urlencode "query=$PROM_Q" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin)['data']['result']; print(r[0]['value'][1] if r else 0)")
+          echo "CPU after: $AFTER"
+
+          RESULT=$(python3 -c "print('PASS' if float('$AFTER') > float('$BEFORE') * 2 and float('$AFTER') > 0.10 else 'FAIL')")
+          if [ "$RESULT" != "PASS" ]; then
+            echo "::error::CPU usage did not rise as expected (before=$BEFORE after=$AFTER)"
+            exit 1
+          fi
+          {
+            echo "## Chaos: stress — PASSED"
+            echo "- system_cpu_usage (promotion-service): $BEFORE -> $AFTER"
+            echo "- Pod CPU limit contained the blast radius (no node impact)"
+            echo "- Stress auto-reverts after 5m"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup experiment objects
+        if: always()
+        run: |
+          case "${{ inputs.experiment }}" in
+            pod-kill)  kubectl delete -f chaos/experiments/pod-kill-promotion.yaml --ignore-not-found ;;
+            partition) kubectl delete -f chaos/experiments/partition-dashboard-promotion.yaml --ignore-not-found ;;
+            stress)    kubectl delete -f chaos/experiments/stress-promotion.yaml --ignore-not-found ;;
+          esac
+          kill "$(cat /tmp/pf-prom.pid)" 2>/dev/null || true

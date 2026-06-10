@@ -1,0 +1,22 @@
+# Experiment 3 — Resource stress
+# Injects CPU pressure inside one promotion-service pod. Expected:
+# process_cpu_usage and p95 latency rise in Grafana/Prometheus while the
+# pod's CPU limit contains the blast radius (no node-level impact, no
+# OOMKill since memory is untouched). duration auto-reverts the stress.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: stress-promotion
+  namespace: stage
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - stage
+    labelSelectors:
+      app.kubernetes.io/name: promotion-service
+  stressors:
+    cpu:
+      workers: 2
+      load: 80
+  duration: 5m

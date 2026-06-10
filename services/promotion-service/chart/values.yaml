@@ -54,7 +54,7 @@ env:
   JAVA_TOOL_OPTIONS: "-Xmx384m -Xms256m -XX:+UseContainerSupport"
   DB_HOST: "postgres"
   DB_NAME: "circleguard_promotion"
-  REDIS_HOST: "redis-master"
+  REDIS_HOST: "redis"
   KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
   NEO4J_URI: "bolt://neo4j:7687"
 

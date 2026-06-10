@@ -56,9 +56,14 @@ jobs:
       - name: "Experiment: pod-kill — capture baseline pod"
         if: ${{ inputs.experiment == 'pod-kill' }}
         run: |
-          kubectl get pods -n "$K8S_NAMESPACE" -l app.kubernetes.io/name=promotion-service \
-            -o jsonpath='{.items[0].metadata.name}' > /tmp/victim.txt
-          echo "Baseline pod: $(cat /tmp/victim.txt)"
+          VICTIM=$(kubectl get pods -n "$K8S_NAMESPACE" -l app.kubernetes.io/name=promotion-service \
+            --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+          if [ -z "$VICTIM" ]; then
+            echo "::error::promotion-service has no Running pod in $K8S_NAMESPACE — deploy it (and auth-service) before running chaos"
+            exit 1
+          fi
+          echo "$VICTIM" > /tmp/victim.txt
+          echo "Baseline pod: $VICTIM"
 
       - name: "Experiment: pod-kill — inject + verify auto-recovery"
         if: ${{ inputs.experiment == 'pod-kill' }}
@@ -85,6 +90,11 @@ jobs:
       - name: "Experiment: partition — inject, drive traffic, assert breaker OPEN"
         if: ${{ inputs.experiment == 'partition' }}
         run: |
+          if [ -z "$(kubectl get pods -n "$K8S_NAMESPACE" -l app.kubernetes.io/name=promotion-service \
+              --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)" ]; then
+            echo "::error::promotion-service has no Running pod in $K8S_NAMESPACE — the partition target is absent; deploy it before running chaos"
+            exit 1
+          fi
           kubectl apply -f chaos/experiments/partition-dashboard-promotion.yaml
           sleep 5
 
@@ -92,7 +102,11 @@ jobs:
           # (COUNT_BASED window 10, min 5 calls, 50% threshold).
           DASH_POD=$(kubectl get pods -n "$K8S_NAMESPACE" -l app.kubernetes.io/name=dashboard-service \
             --field-selector=status.phase=Running --sort-by=.metadata.creationTimestamp \
-            -o jsonpath='{.items[-1].metadata.name}')
+            -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || true)
+          if [ -z "$DASH_POD" ]; then
+            echo "::error::dashboard-service has no Running pod in $K8S_NAMESPACE — deploy it (and promotion-service) before running chaos"
+            exit 1
+          fi
           nohup kubectl port-forward -n "$K8S_NAMESPACE" "pod/$DASH_POD" 18087:8087 >/tmp/pf-dash.log 2>&1 &
           echo $! > /tmp/pf-dash.pid
           sleep 3
@@ -135,6 +149,11 @@ jobs:
       - name: "Experiment: stress — inject + assert CPU delta"
         if: ${{ inputs.experiment == 'stress' }}
         run: |
+          if [ -z "$(kubectl get pods -n "$K8S_NAMESPACE" -l app.kubernetes.io/name=promotion-service \
+              --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)" ]; then
+            echo "::error::promotion-service has no Running pod in $K8S_NAMESPACE — deploy it before running chaos"
+            exit 1
+          fi
           PROM_Q='avg(system_cpu_usage{app="promotion-service"})'
           BEFORE=$(curl -s "http://localhost:19090/api/v1/query" --data-urlencode "query=$PROM_Q" \
             | python3 -c "import sys,json; r=json.load(sys.stdin)['data']['result']; print(r[0]['value'][1] if r else 0)")

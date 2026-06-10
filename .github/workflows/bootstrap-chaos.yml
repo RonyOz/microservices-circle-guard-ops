@@ -12,6 +12,7 @@ env:
   AWS_REGION: us-east-1
   CLUSTER_NAME: circleguard-eks
   CHAOS_MESH_VERSION: 2.7.3
+  GHA_ROLE_NAME: circleguard-gha-role
 
 permissions:
   id-token: write
@@ -52,6 +53,44 @@ jobs:
             --set dashboard.resources.requests.cpu=25m \
             --set dashboard.resources.requests.memory=128Mi \
             --wait --timeout 5m
+
+      - name: Grant chaos RBAC to the CI role
+        run: |
+          # Chaos Mesh's validating webhook (chaos-mesh-validation-auth) authorizes
+          # experiments via a delegated SubjectAccessReview. The CI role's
+          # cluster-admin comes from the EKS access-entry authorizer, which is NOT
+          # consulted in delegated SARs — so the webhook sees no RBAC and denies.
+          # Bind a real RBAC ClusterRole to the assumed-role identity to close that gap.
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          CI_USER="arn:aws:sts::${ACCOUNT_ID}:assumed-role/${GHA_ROLE_NAME}/GitHubActions"
+          kubectl apply -f - <<EOF
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRole
+          metadata:
+            name: chaos-mesh-manager
+          rules:
+            - apiGroups: ["chaos-mesh.org"]
+              resources: ["*"]
+              verbs: ["*"]
+            - apiGroups: [""]
+              resources: ["pods", "pods/log"]
+              verbs: ["get", "list", "watch"]
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: chaos-mesh-manager-ci
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: chaos-mesh-manager
+          subjects:
+            - kind: User
+              name: "${CI_USER}"
+              apiGroup: rbac.authorization.k8s.io
+          EOF
+          echo "Granted chaos-mesh-manager to ${CI_USER}"
+          kubectl auth can-i create networkchaos.chaos-mesh.org -n stage --as "${CI_USER}"
 
       - name: Verify installation
         run: |

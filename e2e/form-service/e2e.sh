@@ -53,7 +53,24 @@ check "Survey without anonymousId rejected"  POST "/api/v1/surveys" "400" \
     -H 'Content-Type: application/json' \
     -d '{"hasFever":true,"hasCough":true}'
 
-check "Questionnaires: list active"          GET  "/api/v1/questionnaires/active" "200"
+check "Questionnaires: list all"             GET  "/api/v1/questionnaires" "200"
+
+# Full lifecycle: create -> activate -> read active. Deterministic regardless
+# of seed data (a fresh database has no active questionnaire, so a bare GET
+# /active would legitimately 404).
+Q_ID=$(curl -s -X POST "$BASE/api/v1/questionnaires" \
+    -H 'Content-Type: application/json' \
+    -d '{"title":"e2e symptom check","version":1}' \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
+if [ -n "$Q_ID" ]; then
+    echo "  PASS  Questionnaire created ($Q_ID)"
+    PASS=$((PASS+1))
+    check "Questionnaire activate"            POST "/api/v1/questionnaires/$Q_ID/activate" "200"
+    check "Questionnaires: get active"        GET  "/api/v1/questionnaires/active" "200"
+else
+    echo "  FAIL  Questionnaire created (no id in response)"
+    FAIL=$((FAIL+1))
+fi
 
 echo "--- Results: $PASS passed, $FAIL failed ---"
 [ "$FAIL" -eq 0 ]

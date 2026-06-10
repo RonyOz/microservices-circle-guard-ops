@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE="${FILE_SERVICE_URL:-http://localhost:8088}"
+BASE="${FILE_SERVICE_URL:-http://localhost:18080}"
 PASS=0
 FAIL=0
 

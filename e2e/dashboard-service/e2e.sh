@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE="${DASHBOARD_SERVICE_URL:-http://localhost:8087}"
+BASE="${DASHBOARD_SERVICE_URL:-http://localhost:18080}"
 PASS=0
 FAIL=0
 

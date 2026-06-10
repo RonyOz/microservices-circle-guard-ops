@@ -43,7 +43,7 @@ check    "Login (invalid creds)"        POST   "/api/v1/auth/login"             
     -d '{"username":"wrong","password":"wrong"}'
 
 TOKEN=$(curl -s -X POST "$BASE/api/v1/auth/login" -H 'Content-Type: application/json' \
-    -d '{"username":"admin","password":"admin"}' | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || echo "")
+    -d '{"username":"staff_guard","password":"password"}' | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || echo "")
 
 if [ -n "$TOKEN" ]; then
     echo "  PASS  Login (valid credentials)"

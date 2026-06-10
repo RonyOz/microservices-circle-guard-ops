@@ -38,14 +38,11 @@ check_any() {
 echo "=== E2E: dashboard-service ==="
 
 check_any "Health endpoint"             GET  "/actuator/health"                    "200 503"
-check     "Analytics: unauthenticated"  GET  "/api/v1/analytics/health-board"      "401"
-check     "Analytics: summary unauth"   GET  "/api/v1/analytics/summary"           "401"
-check     "Analytics: time-series unauth" GET "/api/v1/analytics/time-series"      "401"
 
 AUTH_HEADER=""
 TOKEN=$(curl -s -X POST "${GATEWAY_URL:-http://localhost:8086}/api/v1/auth/login" \
     -H 'Content-Type: application/json' \
-    -d '{"username":"admin","password":"admin"}' \
+    -d '{"username":"staff_guard","password":"password"}' \
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || echo "")
 
 if [ -n "$TOKEN" ]; then

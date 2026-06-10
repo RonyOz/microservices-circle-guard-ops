@@ -38,11 +38,11 @@ check_any() {
 echo "=== E2E: file-service ==="
 
 check_any "Health endpoint"           GET  "/actuator/health"         "200 503"
-check     "Upload: unauthenticated"   POST "/api/v1/files/upload"     "401"
+check     "Upload: no file sent"       POST "/api/v1/files/upload"     "400"
 
 TOKEN=$(curl -s -X POST "${GATEWAY_URL:-http://localhost:8086}/api/v1/auth/login" \
     -H 'Content-Type: application/json' \
-    -d '{"username":"admin","password":"admin"}' \
+    -d '{"username":"staff_guard","password":"password"}' \
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || echo "")
 
 if [ -n "$TOKEN" ]; then

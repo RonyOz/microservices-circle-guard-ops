@@ -33,7 +33,7 @@ http_body() {
 acquire_token() {
     http_body -X POST "$AUTH_URL/api/v1/auth/login" \
         -H 'Content-Type: application/json' \
-        -d '{"username":"admin","password":"admin"}' \
+        -d '{"username":"staff_guard","password":"password"}' \
         | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null \
         || echo ""
 }

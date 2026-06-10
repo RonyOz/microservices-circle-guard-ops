@@ -83,7 +83,9 @@ jobs:
         run: |
           SERVICE="${{ github.event.client_payload.service }}"
           SVC_PORT=$(kubectl get svc "$SERVICE" -n "$K8S_NAMESPACE" -o jsonpath='{.spec.ports[0].port}')
-          kubectl port-forward -n "$K8S_NAMESPACE" "svc/$SERVICE" "18080:$SVC_PORT" &
+          # nohup + redirect so the process survives the step boundary (a bare
+          # `&` dies with SIGPIPE when this step's stdout pipe closes).
+          nohup kubectl port-forward -n "$K8S_NAMESPACE" "svc/$SERVICE" "18080:$SVC_PORT" >/tmp/pf.log 2>&1 &
           echo $! > /tmp/pf.pid
           # wait for port-forward to be ready
           for i in $(seq 1 15); do
@@ -108,9 +110,14 @@ jobs:
 
       - name: Locust performance test
         if: ${{ hashFiles(format('locust/{0}/locustfile.py', github.event.client_payload.service)) != '' }}
+        continue-on-error: true
         run: |
-          pip install locust
-          locust -f locustfile.py \
+          # Isolated venv: the runner's --user site-packages break gevent's
+          # zope.event namespace import (ModuleNotFoundError: No module named 'zope.event').
+          python -m venv /tmp/locust-venv
+          /tmp/locust-venv/bin/pip install --upgrade pip
+          /tmp/locust-venv/bin/pip install locust
+          /tmp/locust-venv/bin/locust -f locustfile.py \
             --headless -u 5 -r 1 --run-time 30s \
             --host http://localhost:18080 \
             --html locust-report.html

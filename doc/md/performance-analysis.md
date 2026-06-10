@@ -1,7 +1,7 @@
 # CircleGuard — Análisis de Pruebas de Rendimiento (Locust)
 
 **Herramienta:** [Locust](https://locust.io/) v2.x  
-**Cluster objetivo:** AWS EKS `circleguard-eks` · namespace `stage`  
+**Cluster objetivo:** AWS EKS `circleguard-eks` · namespace `dev`  
 **Fecha de referencia:** 2026-06-02
 
 ---

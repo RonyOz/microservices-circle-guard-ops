@@ -149,6 +149,7 @@ kubectl port-forward -n production svc/sonarqube 9000:9000
 | `HighHttpErrorRate` | >5% de requests con 5xx por 5 min | warning |
 | `CircuitBreakerOpen` | Resilience4j circuit abierto >1 min | warning |
 | `HighRequestLatency` | p95 > 2s por 5 min | warning |
+| `HighExposurePromotionRate` | Tasa anómala de promociones de estado de salud (métrica de negocio) | warning |
 
 ---
 
@@ -264,6 +265,13 @@ Para **rechazar y mantener la versión actual**: "Reject" — el `helm upgrade` 
 
 Para recrear desde cero: `./scripts/aws-up.sh` seguido del bootstrap completo (sección 2).
 
+### Costo de mantener el cluster encendido
+
+Producción always-on ≈ **$380/mes**; con apagado por demanda (`aws-down.sh`/`aws-up.sh`,
+~120 h/mes) baja a ≈ **$146/mes**. Costo fijo inevitable mientras exista el cluster:
+EKS control plane ($73) + EBS de PVCs ($6). Detalle completo y estrategias FinOps en
+[`cost-analysis.md`](./cost-analysis.md).
+
 ---
 
-*Última actualización: 2026-06-02*
+*Última actualización: 2026-06-09*

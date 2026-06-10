@@ -94,6 +94,23 @@ jobs:
           SERVICE="${{ github.event.client_payload.service }}"
           SVC_PORT=$(kubectl get svc "$SERVICE" -n "$K8S_NAMESPACE" -o jsonpath='{.spec.ports[0].port}')
 
+          # Also forward auth-service so e2e scripts can obtain a JWT.
+          # If it isn't deployed the scripts SKIP their authenticated checks.
+          if [ "$SERVICE" != "auth-service" ] && kubectl get svc auth-service -n "$K8S_NAMESPACE" >/dev/null 2>&1; then
+            AUTH_POD=$(kubectl get pods -n "$K8S_NAMESPACE" \
+              -l "app.kubernetes.io/name=auth-service" \
+              --field-selector=status.phase=Running \
+              --sort-by=.metadata.creationTimestamp \
+              -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || true)
+            if [ -n "$AUTH_POD" ]; then
+              nohup kubectl port-forward -n "$K8S_NAMESPACE" "pod/$AUTH_POD" "18081:8081" >/tmp/pf-auth.log 2>&1 &
+              echo $! > /tmp/pf-auth.pid
+              echo "AUTH_URL=http://localhost:18081" >> "$GITHUB_ENV"
+            fi
+          elif [ "$SERVICE" = "auth-service" ]; then
+            echo "AUTH_URL=http://localhost:18080" >> "$GITHUB_ENV"
+          fi
+
           # Forward to an explicit, newest Ready pod. Right after a rolling
           # upgrade (maxSurge: 0) the old pod is still Terminating and
           # `port-forward svc/...` can resolve to it, leaving the tunnel
@@ -138,12 +155,13 @@ jobs:
           fi
 
       - name: OWASP ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.12.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           target: 'http://localhost:18080'
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-I'
           artifact_name: zap-report-${{ github.event.client_payload.service }}
+          allow_issue_writing: false
         continue-on-error: true
 
       - name: Locust performance test
@@ -202,7 +220,9 @@ jobs:
 
       - name: Stop port-forward
         if: always()
-        run: kill $(cat /tmp/pf.pid) 2>/dev/null || true
+        run: |
+          kill $(cat /tmp/pf.pid) 2>/dev/null || true
+          kill $(cat /tmp/pf-auth.pid) 2>/dev/null || true
 
       - name: Open issue on failure
         if: failure()

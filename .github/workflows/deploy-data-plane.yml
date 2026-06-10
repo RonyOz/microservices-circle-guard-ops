@@ -70,7 +70,7 @@ jobs:
               --arg neo  '${{ secrets.NEO4J_PASSWORD || secrets.DB_PASSWORD }}' \
               --arg ldap '${{ secrets.LDAP_ADMIN_PASSWORD || secrets.DB_PASSWORD }}' \
               --arg jwt  '${{ secrets.JWT_SECRET }}' \
-              '{DB_USERNAME:"circleguard",DB_PASSWORD:$dbp,NEO4J_USERNAME:"neo4j",NEO4J_PASSWORD:$neo,LDAP_ADMIN_PASSWORD:$ldap,JWT_SECRET:$jwt}')"
+              '{DB_USERNAME:"circleguard",DB_PASSWORD:$dbp,NEO4J_USERNAME:"neo4j",NEO4J_PASSWORD:$neo,LDAP_ADMIN_PASSWORD:$ldap,LDAP_PASSWORD:$ldap,JWT_SECRET:$jwt}')"
 
       - name: Helm lint
         if: ${{ github.event.inputs.action == 'deploy' }}

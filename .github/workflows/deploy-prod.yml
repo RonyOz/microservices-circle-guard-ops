@@ -99,9 +99,16 @@ jobs:
 
       - name: Sync runtime secrets to Secrets Manager
         run: |
+          # Same canonical shape as deploy-data-plane.yml — a partial overwrite
+          # here would drop keys other consumers depend on (openldap, app LDAP).
           aws secretsmanager put-secret-value \
             --secret-id "circleguard/${{ env.K8S_NAMESPACE }}" \
-            --secret-string "{\"DB_USERNAME\":\"circleguard\",\"DB_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"NEO4J_USERNAME\":\"neo4j\",\"NEO4J_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"JWT_SECRET\":\"${{ secrets.JWT_SECRET }}\"}"
+            --secret-string "$(jq -nc \
+              --arg dbp  '${{ secrets.DB_PASSWORD }}' \
+              --arg neo  '${{ secrets.NEO4J_PASSWORD || secrets.DB_PASSWORD }}' \
+              --arg ldap '${{ secrets.LDAP_ADMIN_PASSWORD || secrets.DB_PASSWORD }}' \
+              --arg jwt  '${{ secrets.JWT_SECRET }}' \
+              '{DB_USERNAME:"circleguard",DB_PASSWORD:$dbp,NEO4J_USERNAME:"neo4j",NEO4J_PASSWORD:$neo,LDAP_ADMIN_PASSWORD:$ldap,LDAP_PASSWORD:$ldap,JWT_SECRET:$jwt}')"
 
       - name: Deploy to ${{ env.K8S_NAMESPACE }} with --atomic
         run: |

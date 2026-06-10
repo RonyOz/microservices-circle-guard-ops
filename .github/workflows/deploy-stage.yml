@@ -43,9 +43,19 @@ jobs:
 
       - name: Sync runtime secrets to Secrets Manager
         run: |
+          # Same canonical shape as deploy-data-plane.yml — a partial overwrite
+          # here would drop keys other consumers depend on (openldap, app LDAP).
+          # LDAP_PASSWORD duplicates LDAP_ADMIN_PASSWORD because the app reads
+          # spring.ldap.password from env LDAP_PASSWORD, while the openldap
+          # container is provisioned from LDAP_ADMIN_PASSWORD.
           aws secretsmanager put-secret-value \
             --secret-id "circleguard/${{ env.K8S_NAMESPACE }}" \
-            --secret-string "{\"DB_USERNAME\":\"circleguard\",\"DB_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"NEO4J_USERNAME\":\"neo4j\",\"NEO4J_PASSWORD\":\"${{ secrets.DB_PASSWORD }}\",\"JWT_SECRET\":\"${{ secrets.JWT_SECRET }}\"}"
+            --secret-string "$(jq -nc \
+              --arg dbp  '${{ secrets.DB_PASSWORD }}' \
+              --arg neo  '${{ secrets.NEO4J_PASSWORD || secrets.DB_PASSWORD }}' \
+              --arg ldap '${{ secrets.LDAP_ADMIN_PASSWORD || secrets.DB_PASSWORD }}' \
+              --arg jwt  '${{ secrets.JWT_SECRET }}' \
+              '{DB_USERNAME:"circleguard",DB_PASSWORD:$dbp,NEO4J_USERNAME:"neo4j",NEO4J_PASSWORD:$neo,LDAP_ADMIN_PASSWORD:$ldap,LDAP_PASSWORD:$ldap,JWT_SECRET:$jwt}')"
 
       - name: Trivy scan — image vulnerability report
         uses: aquasecurity/trivy-action@master
@@ -99,9 +109,12 @@ jobs:
             # `&` dies with SIGPIPE when this step's stdout pipe closes).
             nohup kubectl port-forward -n "$K8S_NAMESPACE" "pod/$POD" "18080:$SVC_PORT" >/tmp/pf.log 2>&1 &
             echo $! > /tmp/pf.pid
+            # Tunnel-ready check: any HTTP status counts (000 = no connection).
+            # App health is the e2e's business — it deliberately accepts 503.
             for i in $(seq 1 10); do
-              if curl -sf http://localhost:18080/actuator/health >/dev/null; then
-                echo "Port-forward ready (pod $POD)"
+              CODE=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:18080/actuator/health || true)
+              if [ "$CODE" != "000" ] && [ -n "$CODE" ]; then
+                echo "Port-forward ready (pod $POD, health HTTP $CODE)"
                 exit 0
               fi
               sleep 2

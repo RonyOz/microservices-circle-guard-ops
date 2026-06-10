@@ -4,8 +4,11 @@ Simulates document uploads (health certificates, attachments).
 """
 from locust import HttpUser, task, between
 import io
+import os
 import random
 import string
+
+import requests
 
 
 def random_filename():
@@ -21,15 +24,22 @@ class FileUser(HttpUser):
     token = None
 
     def on_start(self):
-        with self.client.post(
-            "/api/v1/auth/login",
-            json={"username": "admin", "password": "admin"},
-            catch_response=True
-        ) as resp:
+        # file-service does not serve /auth/login — a token is only obtainable
+        # when auth-service is reachable (AUTH_URL env). Without it, uploads
+        # are exercised unauthenticated (service enforces auth at the gateway).
+        auth_url = os.environ.get("AUTH_URL", "")
+        if not auth_url:
+            return
+        try:
+            resp = requests.post(
+                f"{auth_url}/api/v1/auth/login",
+                json={"username": "staff_guard", "password": "password"},
+                timeout=5,
+            )
             if resp.status_code == 200:
                 self.token = resp.json().get("token")
-            else:
-                resp.failure(f"Login failed: {resp.status_code}")
+        except requests.RequestException:
+            pass
 
     def _auth_headers(self):
         return {"Authorization": f"Bearer {self.token}"} if self.token else {}

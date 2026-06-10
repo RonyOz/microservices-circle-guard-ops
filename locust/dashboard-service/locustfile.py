@@ -4,28 +4,20 @@ Simulates concurrent analytics queries across trends, health-board, and departme
 """
 from locust import HttpUser, task, between
 import random
+import uuid
 
 DEPARTMENTS = ["engineering", "medicine", "law", "sciences", "business"]
-LOCATION_IDS = [f"loc-{i:03d}" for i in range(1, 21)]
+# locationId is a UUID path variable — non-UUID values are rejected with 400
+LOCATION_IDS = [str(uuid.uuid4()) for _ in range(20)]
 
 
+# dashboard-service has no Spring Security by design (auth is enforced at the
+# gateway), so the analytics endpoints are exercised without a token.
 class DashboardUser(HttpUser):
     wait_time = between(1, 3)
-    token = None
-
-    def on_start(self):
-        with self.client.post(
-            "/api/v1/auth/login",
-            json={"username": "admin", "password": "admin"},
-            catch_response=True
-        ) as resp:
-            if resp.status_code == 200:
-                self.token = resp.json().get("token")
-            else:
-                resp.failure(f"Login failed: {resp.status_code}")
 
     def _auth_headers(self):
-        return {"Authorization": f"Bearer {self.token}"} if self.token else {}
+        return {}
 
     @task(4)
     def health_board(self):
@@ -35,7 +27,7 @@ class DashboardUser(HttpUser):
             headers=self._auth_headers(),
             catch_response=True
         ) as resp:
-            if resp.status_code not in (200, 401, 403):
+            if resp.status_code != 200:
                 resp.failure(f"Unexpected: {resp.status_code}")
 
     @task(3)
@@ -45,7 +37,7 @@ class DashboardUser(HttpUser):
             headers=self._auth_headers(),
             catch_response=True
         ) as resp:
-            if resp.status_code not in (200, 401, 403):
+            if resp.status_code != 200:
                 resp.failure(f"Unexpected: {resp.status_code}")
 
     @task(2)
@@ -57,7 +49,7 @@ class DashboardUser(HttpUser):
             name="/api/v1/analytics/trends/[locationId]",
             catch_response=True
         ) as resp:
-            if resp.status_code not in (200, 401, 403, 404):
+            if resp.status_code not in (200, 404):
                 resp.failure(f"Unexpected: {resp.status_code}")
 
     @task(2)
@@ -69,7 +61,7 @@ class DashboardUser(HttpUser):
             name="/api/v1/analytics/department/[dept]",
             catch_response=True
         ) as resp:
-            if resp.status_code not in (200, 401, 403, 404):
+            if resp.status_code not in (200, 404):
                 resp.failure(f"Unexpected: {resp.status_code}")
 
     @task(1)
@@ -79,5 +71,5 @@ class DashboardUser(HttpUser):
             headers=self._auth_headers(),
             catch_response=True
         ) as resp:
-            if resp.status_code not in (200, 401, 403):
+            if resp.status_code != 200:
                 resp.failure(f"Unexpected: {resp.status_code}")

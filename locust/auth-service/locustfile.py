@@ -1,16 +1,10 @@
 """
 Locust performance tests — auth-service
-Simulates concurrent login + token refresh flows.
+Simulates concurrent logins (dual-chain LDAP → local DB) and QR token issuance.
 """
 from locust import HttpUser, task, between
-import json
-import random
-import string
 
-
-def random_user():
-    suffix = ''.join(random.choices(string.ascii_lowercase, k=6))
-    return f"testuser_{suffix}@circleguard.edu"
+CREDENTIALS = {"username": "staff_guard", "password": "password"}
 
 
 class AuthUser(HttpUser):
@@ -20,8 +14,8 @@ class AuthUser(HttpUser):
     def on_start(self):
         """Authenticate once per simulated user at spawn."""
         with self.client.post(
-            "/api/auth/login",
-            json={"email": random_user(), "password": "TestPass123!"},
+            "/api/v1/auth/login",
+            json=CREDENTIALS,
             catch_response=True
         ) as response:
             if response.status_code == 200:
@@ -30,29 +24,26 @@ class AuthUser(HttpUser):
                 response.failure(f"Login failed: {response.status_code}")
 
     @task(3)
-    def validate_token(self):
-        """Most common operation — validate an existing token."""
+    def generate_qr_token(self):
+        """Most common authenticated operation — short-lived QR issuance."""
         if not self.token:
             return
         with self.client.get(
-            "/api/auth/validate",
+            "/api/v1/auth/qr/generate",
             headers={"Authorization": f"Bearer {self.token}"},
             catch_response=True
         ) as resp:
-            if resp.status_code not in (200, 401):
+            if resp.status_code != 200:
                 resp.failure(f"Unexpected status: {resp.status_code}")
 
     @task(1)
-    def refresh_token(self):
-        """Less frequent — refresh tokens near expiry."""
-        if not self.token:
-            return
+    def fresh_login(self):
+        """Measures full login latency (LDAP bind attempt + local DB fallback)."""
         with self.client.post(
-            "/api/auth/refresh",
-            headers={"Authorization": f"Bearer {self.token}"},
+            "/api/v1/auth/login",
+            json=CREDENTIALS,
+            name="/api/v1/auth/login (fresh)",
             catch_response=True
         ) as resp:
-            if resp.status_code == 200:
-                self.token = resp.json().get("token")
-            elif resp.status_code not in (401, 403):
+            if resp.status_code != 200:
                 resp.failure(f"Unexpected status: {resp.status_code}")

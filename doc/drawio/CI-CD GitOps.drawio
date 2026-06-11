@@ -67,7 +67,7 @@
                 <mxCell id="ci_note" value="PR → tests only.  push / main → build + push + deploy." style="text;html=1;align=center;verticalAlign=middle;fontFamily=Verdana;fontSize=9;fontStyle=2;fontColor=#333333;labelBackgroundColor=none;" parent="1" vertex="1">
                     <mxGeometry x="546.5" y="359" width="170" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="ecr" value="Amazon ECR&#xa;circleguard:&lt;svc&gt;-sha-&lt;commit7&gt;&#xa;(IMMUTABLE, single repo)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;fontFamily=Verdana;fontSize=10;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                <mxCell id="ecr" value="Amazon ECR&#xa;circleguard:&lt;svc&gt;-sha-&lt;commit7&gt;&#xa;(MUTABLE tags, single repo)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;fontFamily=Verdana;fontSize=10;strokeColor=#6c8ebf;" parent="1" vertex="1">
                     <mxGeometry x="882" y="180" width="158" height="70" as="geometry"/>
                 </mxCell>
                 <mxCell id="ecr_aws_icon" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=default;verticalAlign=top;aspect=fixed;imageAspect=0;image=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/aws.svg;" parent="1" vertex="1">
@@ -91,7 +91,7 @@
                 <mxCell id="dep_dev" value="deploy-dev.yml → ns dev&#xa;OIDC · update-kubeconfig · sync secrets&#xa;helm lint · helm upgrade --install · rollout · smoke (e2e.sh)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#f5f5f5;fontFamily=Verdana;fontSize=9;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="1139" y="140" width="244" height="62" as="geometry"/>
                 </mxCell>
-                <mxCell id="dep_stage" value="deploy-stage.yml → ns stage&#xa;deploy + E2E / Locust / ZAP (planned)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#f5f5f5;fontFamily=Verdana;fontSize=9;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
+                <mxCell id="dep_stage" value="deploy-stage.yml → ns stage&#xa;Trivy scan · deploy · E2E · ZAP baseline · Locust · cross-service E2E" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#f5f5f5;fontFamily=Verdana;fontSize=9;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="1139" y="210" width="244" height="56" as="geometry"/>
                 </mxCell>
                 <mxCell id="dep_prod" value="deploy-prod.yml → ns production&#xa;verify image in ECR · Trivy gate (block HIGH/CRITICAL)&#xa;await approval · helm upgrade --atomic" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#f5f5f5;fontFamily=Verdana;fontSize=9;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
@@ -100,7 +100,7 @@
                 <mxCell id="ops_helm_icon" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=default;verticalAlign=top;aspect=fixed;imageAspect=0;image=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/helm.svg;" parent="1" vertex="1">
                     <mxGeometry x="1540" y="270" width="12" height="12" as="geometry"/>
                 </mxCell>
-                <mxCell id="ops_oneoff" value="bootstrap-eso.yml (once) · deploy-data-plane.yml (per ns)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=none;fontFamily=Verdana;fontSize=9;dashed=1;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
+                <mxCell id="ops_oneoff" value="bootstrap-eso.yml / bootstrap-chaos.yml (once) · deploy-data-plane.yml (per ns) · chaos-experiments.yml (stage)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=none;fontFamily=Verdana;fontSize=9;dashed=1;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="1139" y="343" width="244" height="36" as="geometry"/>
                 </mxCell>
                 <mxCell id="ops_oidc" value="kubectl / helm authenticate via OIDC (EKS access entry)" style="text;html=1;align=center;verticalAlign=middle;fontFamily=Verdana;fontSize=9;fontStyle=2;fontColor=#FF9900;labelBackgroundColor=none;" parent="1" vertex="1">

@@ -19,8 +19,10 @@ variable "kubernetes_version" {
 }
 
 variable "node_instance_types" {
+  # Multiple equivalent types (2 vCPU / 8 GB) so SPOT can pick the deepest
+  # capacity pool and reduce interruption risk.
   type    = list(string)
-  default = ["m7i-flex.large"]
+  default = ["m7i-flex.large", "m6i.large", "m5.large"]
 }
 
 variable "node_desired_count" {
@@ -29,13 +31,25 @@ variable "node_desired_count" {
 }
 
 variable "node_min_count" {
+  # 0 allows scale-to-zero (scripts/scale-down.sh --zero) without Terraform drift.
   type    = number
-  default = 1
+  default = 0
 }
 
 variable "node_max_count" {
   type    = number
   default = 4
+}
+
+variable "node_capacity_type" {
+  description = "Capacity type for the EKS node group: SPOT (~70% cheaper, interruptible — fine for an academic cluster) or ON_DEMAND. Changing this replaces the node group (~10 min downtime)."
+  type        = string
+  default     = "SPOT"
+
+  validation {
+    condition     = contains(["SPOT", "ON_DEMAND"], var.node_capacity_type)
+    error_message = "node_capacity_type must be SPOT or ON_DEMAND."
+  }
 }
 
 variable "gha_subject_patterns" {

@@ -3,9 +3,12 @@ environment        = "prod"
 cluster_name       = "circleguard-eks"
 kubernetes_version = "1.30"
 
-node_instance_types = ["t3.medium"]
+# FinOps: SPOT (~60-70% cheaper) with multiple equivalent instance types;
+# min=0 enables scale-to-zero (scripts/scale-down.sh --zero).
+node_instance_types = ["m7i-flex.large", "m6i.large", "m5.large"]
+node_capacity_type  = "SPOT"
 node_desired_count  = 2
-node_min_count      = 1
+node_min_count      = 0
 node_max_count      = 4
 
 gha_subject_patterns = [

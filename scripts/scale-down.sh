@@ -2,17 +2,28 @@
 # scripts/scale-down.sh
 # Return the EKS managed node group to its baseline size after a temporary
 # scale-up (scripts/scale-up.sh). Baseline matches terraform.tfvars
-# (node_desired_count=2, node_min_count=1, node_max_count=4).
+# (node_desired_count=2, node_min_count=0, node_max_count=4).
 #
 # Usage:
 #   ./scripts/scale-down.sh [DESIRED_SIZE]    # default 2
 #   DESIRED_SIZE=1 WAIT=false ./scripts/scale-down.sh
+#   ./scripts/scale-down.sh --zero            # scale to ZERO nodes (FinOps:
+#                                             # compute cost -> $0; control
+#                                             # plane + EBS keep billing).
+#                                             # Pods stay Pending; recover with
+#                                             # ./scripts/scale-up.sh
 set -euo pipefail
 
 CLUSTER_NAME="${CLUSTER_NAME:-circleguard-eks}"
 REGION="${AWS_REGION:-us-east-1}"
-DESIRED_SIZE="${1:-${DESIRED_SIZE:-2}}"
-MIN_SIZE="${MIN_SIZE:-1}"
+
+if [[ "${1:-}" == "--zero" ]]; then
+  DESIRED_SIZE=0
+  MIN_SIZE=0
+else
+  DESIRED_SIZE="${1:-${DESIRED_SIZE:-2}}"
+  MIN_SIZE="${MIN_SIZE:-0}"
+fi
 MAX_SIZE="${MAX_SIZE:-4}"
 WAIT="${WAIT:-true}"
 

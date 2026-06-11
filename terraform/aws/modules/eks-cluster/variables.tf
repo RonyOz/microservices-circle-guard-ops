@@ -24,12 +24,23 @@ variable "node_desired_count" {
 
 variable "node_min_count" {
   type    = number
-  default = 1
+  default = 0
 }
 
 variable "node_max_count" {
   type    = number
   default = 4
+}
+
+variable "node_capacity_type" {
+  description = "Capacity type for the managed node group: SPOT (~70% cheaper, interruptible) or ON_DEMAND. Changing this replaces the node group."
+  type        = string
+  default     = "SPOT"
+
+  validation {
+    condition     = contains(["SPOT", "ON_DEMAND"], var.node_capacity_type)
+    error_message = "node_capacity_type must be SPOT or ON_DEMAND."
+  }
 }
 
 variable "deploy_role_arn" {

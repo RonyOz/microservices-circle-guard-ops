@@ -86,14 +86,16 @@ PVCs ($6). Para llevarlo casi a $0 hay que `terraform destroy` completo (`aws-do
 | ECR lifecycle policy (keep 20 imágenes) | ✅ implementado | acota crecimiento de storage |
 | Apagado por demanda (`aws-down.sh`) | ✅ script listo | ~62% en cómputo |
 | `m7i-flex` (burstable) sobre `m7i` fijo | ✅ implementado | ~5% sobre nodos |
-| Spot instances para node group | ❌ pendiente | hasta -70% en nodos |
+| **Spot instances** para node group (`node_capacity_type = "SPOT"`) | ✅ implementado | ~60–70% en nodos |
+| **Scale-to-zero** (`scale-down.sh --zero`, `node_min_count = 0`) | ✅ implementado | cómputo → $0 sin destruir cluster |
 | Graviton (`m7g`/`t4g`) en lugar de x86 | ❌ pendiente | ~20% sobre nodos |
 | HPA (gateway + auth, min=1/max=3/CPU 70%) | ✅ implementado | ~$12–15/mes en horas valle |
 | AWS Budgets + alerta de costo ($20/mes, 80%+100%) | ✅ implementado (IaC) | gobernanza |
 
-> El bonus **FinOps** del enunciado pediría: Budgets en Terraform, dashboards de costo
-> en Grafana, y spot/scale-to-zero. Las dos primeras filas ✅ ya cubren parte de
-> "políticas de ahorro"; spot + KEDA son el siguiente paso de mayor impacto.
+> Cobertura del bonus **FinOps**: Budgets en Terraform ✅, dashboard de costo en
+> Grafana ✅ (`circleguard-finops`, panels 9–12 con $/h, $/mes y costo por servicio),
+> spot ✅, scale-to-zero ✅. Graviton queda como única optimización pendiente
+> (requiere rebuild multi-arch de las imágenes).
 
 ---
 
@@ -143,9 +145,39 @@ servicios de mayor tráfico externo:
 | 5 | Resource tagging (`Project=circleguard`) | ✅ | gobernanza — filtra en Cost Explorer |
 | 6 | **HPA** gateway + auth (min=1, max=3) | ✅ | ~$12–15 en horas valle |
 | 7 | **AWS Budgets** $20/mes alerta 80%/100% | ✅ (IaC) | gobernanza — evita sorpresas |
-| 8 | **Dashboard Grafana FinOps** (CPU/mem utilization + HPA) | ✅ | visibilidad continua |
-| 9 | Spot instances para node group | ❌ pendiente | hasta -70% en nodos |
-| 10 | Graviton (`m7g`) en lugar de x86 | ❌ pendiente | ~20% en nodos |
+| 8 | **Dashboard Grafana FinOps** (utilization + HPA + costo estimado $/h, $/mes, por servicio) | ✅ | visibilidad continua |
+| 9 | **Spot instances** (`node_capacity_type = "SPOT"`, 3 tipos equivalentes para diversificar pools) | ✅ | ~60–70% en nodos (~$125–145 always-on; ~$21–24 en modo 120h) |
+| 10 | **Scale-to-zero** (`scale-down.sh --zero` + `node_min_count=0`) | ✅ | cómputo → $0 en pausas largas sin `terraform destroy` |
+| 11 | Graviton (`m7g`) en lugar de x86 | ❌ pendiente | ~20% en nodos (requiere imágenes multi-arch) |
 
-**Total estrategias activas:** 8 de 10. Ahorro máximo realizable con configuración
-actual (modo on-demand 120h/mes): **≈ $270–290 / mes** vs. always-on sin optimizar.
+**Total estrategias activas:** 10 de 11.
+
+---
+
+## 8. Spot + scale-to-zero — detalle y asunciones (implementado 2026-06-10)
+
+**Spot.** El managed node group usa `capacity_type = SPOT` con tres tipos
+equivalentes (2 vCPU / 8 GB): `m7i-flex.large`, `m6i.large`, `m5.large` — EKS
+elige el pool spot con más capacidad y reduce el riesgo de interrupción.
+
+| Modo | Precio nodo/h (us-east-1) | 3 nodos × 730 h | 3 nodos × 120 h |
+|------|--------------------------:|----------------:|----------------:|
+| On-Demand (`m7i-flex.large`) | ~$0.0958 | $209.70 | $34.50 |
+| **Spot (promedio histórico ~60–70% desc.)** | **~$0.030–0.038** | **~$66–83** | **~$11–14** |
+| **Ahorro** | | **~$125–145** | **~$21–24** |
+
+*Asunciones:* precio spot fluctúa por pool/AZ; se usa el rango histórico típico
+60–70% bajo lista (verificable en `aws ec2 describe-spot-price-history`).
+Interrupciones (aviso de 2 min) son aceptables: cargas stateless con réplicas,
+HPA re-programa pods, y los datos viven en EBS/PVC que sobreviven al nodo.
+**No apto para producción real con SLA** — para este proyecto académico el
+tradeoff es correcto.
+
+**Scale-to-zero.** `./scripts/scale-down.sh --zero` deja el node group en
+`min=0, desired=0`: el cómputo factura $0 y solo quedan los fijos (EKS control
+plane $73/mes + EBS ~$6). A diferencia de `aws-down.sh` (destroy completo), el
+cluster, los PVC y los datos quedan intactos; `./scripts/scale-up.sh` restaura
+nodos en ~3–5 min. `node_min_count = 0` en Terraform evita drift.
+
+**Ahorro consolidado vs. setup naive** (3 nodos on-demand always-on ≈ $380/mes):
+spot + uso 120 h/mes + scale-to-zero el resto → **≈ $95–105/mes** (~73% menos).

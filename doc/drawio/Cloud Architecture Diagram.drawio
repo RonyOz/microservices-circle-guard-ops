@@ -46,16 +46,16 @@
                 <mxCell id="3" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=default;verticalAlign=top;aspect=fixed;imageAspect=0;image=https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/github.svg;fillColor=#FFFFFF;" parent="1" vertex="1">
                     <mxGeometry x="480" y="454" width="30" height="30" as="geometry"/>
                 </mxCell>
-                <mxCell id="ops_tf" value="Terraform (terraform/aws/)&#xa;modules/{vpc, eks-cluster, ecr,&#xa;github-oidc} · S3 backend" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#f5f5f5;fontFamily=Verdana;fontSize=10;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
+                <mxCell id="ops_tf" value="Terraform (terraform/aws/)&#xa;modules/{vpc, eks-cluster, ecr,&#xa;github-oidc, irsa-secrets} · S3 backend" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#f5f5f5;fontFamily=Verdana;fontSize=10;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="220" y="500" width="280" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="ops_helm" value="Helm charts (services/{svc}/chart)&#xa;values per env" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#f5f5f5;fontFamily=Verdana;fontSize=10;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="220" y="570" width="280" height="50" as="geometry"/>
                 </mxCell>
-                <mxCell id="ops_gha" value="GHA workflows&#xa;deploy-dev/stage/prod/infra.yml" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#f5f5f5;fontFamily=Verdana;fontSize=10;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
+                <mxCell id="ops_gha" value="GHA workflows&#xa;deploy-dev/stage/prod · deploy-data-plane&#xa;bootstrap-eso · bootstrap-chaos · chaos-experiments" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#f5f5f5;fontFamily=Verdana;fontSize=10;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="220" y="630" width="280" height="50" as="geometry"/>
                 </mxCell>
-                <mxCell id="ops_locust" value="Locust + ZAP + Trivy (in stage workflow)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=none;fontFamily=Verdana;fontSize=10;dashed=1;fontColor=#333333;" parent="1" vertex="1">
+                <mxCell id="ops_locust" value="Locust + ZAP + Trivy + Chaos Mesh (stage)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=none;fontFamily=Verdana;fontSize=10;dashed=1;fontColor=#333333;" parent="1" vertex="1">
                     <mxGeometry x="220" y="690" width="280" height="40" as="geometry"/>
                 </mxCell>
                 <mxCell id="ops_icon_tf" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=default;verticalAlign=top;aspect=fixed;imageAspect=0;image=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/terraform.svg;fillColor=#FFFFFF;" parent="1" vertex="1">
@@ -73,7 +73,7 @@
                 <mxCell id="aws_global_lbl" value="AWS account 888900520630 — Global (us-east-1)" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=10;fontStyle=1;fontColor=#FF9900;labelBackgroundColor=none;" parent="1" vertex="1">
                     <mxGeometry x="655" y="158" width="220" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="ecr" value="ECR&#xa;circleguard (IMMUTABLE)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;fontFamily=Verdana;fontSize=10;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                <mxCell id="ecr" value="ECR&#xa;circleguard (MUTABLE tags)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;fontFamily=Verdana;fontSize=10;strokeColor=#6c8ebf;" parent="1" vertex="1">
                     <mxGeometry x="665" y="194" width="200" height="55" as="geometry"/>
                 </mxCell>
                 <mxCell id="oidc_role" value="IAM OIDC + Role&#xa;circleguard-gha-role" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;fontFamily=Verdana;fontSize=10;strokeColor=#6c8ebf;" parent="1" vertex="1">
@@ -97,7 +97,7 @@
                 <mxCell id="aws_vpc_lbl" value="AWS VPC circleguard-vpc (10.0.0.0/16) — us-east-1" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=10;fontStyle=1;fontColor=#0066CC;labelBackgroundColor=none;" parent="1" vertex="1">
                     <mxGeometry x="1084" y="94" width="480" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="eks_addons_lbl" value="EKS managed node group · m7i-flex.large ×2 · addons: EBS CSI driver (gp3 PVCs), AWS Load Balancer Controller, External Secrets Operator" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=8;fontStyle=2;fontColor=#0066CC;labelBackgroundColor=none;" parent="1" vertex="1">
+                <mxCell id="eks_addons_lbl" value="EKS managed node group · m7i-flex.large ×2 · addons: EBS CSI driver (gp2 PVCs), AWS Load Balancer Controller, External Secrets Operator" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=8;fontStyle=2;fontColor=#0066CC;labelBackgroundColor=none;" parent="1" vertex="1">
                     <mxGeometry x="1084" y="110" width="480" height="14" as="geometry"/>
                 </mxCell>
                 <mxCell id="k8s_icon" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=default;verticalAlign=top;aspect=fixed;imageAspect=0;image=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/kubernetes.svg;fillColor=#FFFFFF;" parent="1" vertex="1">
@@ -130,7 +130,7 @@
                 <mxCell id="ns_prod_lbl" value="namespace: production" style="text;html=1;align=left;verticalAlign=middle;fontFamily=Verdana;fontSize=9;fontStyle=2;fontColor=#333333;labelBackgroundColor=none;" parent="1" vertex="1">
                     <mxGeometry x="1352" y="334" width="200" height="16" as="geometry"/>
                 </mxCell>
-                <mxCell id="ns_prod_pods" value="services (replicas + HPA/KEDA)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fontFamily=Verdana;fontSize=10;fillColor=#f5f5f5;strokeColor=#999999;" parent="1" vertex="1">
+                <mxCell id="ns_prod_pods" value="services (replicas + HPA: auth · gateway)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fontFamily=Verdana;fontSize=10;fillColor=#f5f5f5;strokeColor=#999999;" parent="1" vertex="1">
                     <mxGeometry x="1364" y="358" width="180" height="35" as="geometry"/>
                 </mxCell>
                 <mxCell id="ns_data_box" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=6;fillColor=none;strokeColor=#999999;dashed=1;" parent="1" vertex="1">
@@ -160,7 +160,7 @@
                 <mxCell id="db_mh" value="MailHog" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fontFamily=Verdana;fontSize=10;fillColor=#f5f5f5;strokeColor=#999999;" parent="1" vertex="1">
                     <mxGeometry x="1211" y="508" width="85" height="35" as="geometry"/>
                 </mxCell>
-                <mxCell id="observability" value="Observability (Section 7 — planned)&#xa;Prometheus · Grafana · Jaeger&#xa;ELK (Elastic + Kibana + Filebeat)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=none;fontFamily=Verdana;fontSize=10;dashed=1;fontColor=#333333;strokeColor=#999999;" parent="1" vertex="1">
+                <mxCell id="observability" value="Observability (per namespace, circleguard-infra chart)&#xa;Prometheus · Grafana · AlertManager · Jaeger&#xa;ELK (Elasticsearch + Kibana + Filebeat) · kube-state-metrics" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=none;fontFamily=Verdana;fontSize=10;dashed=0;fontColor=#333333;strokeColor=#999999;" parent="1" vertex="1">
                     <mxGeometry x="1104" y="570" width="230" height="50" as="geometry"/>
                 </mxCell>
                 <mxCell id="istio" value="Istio (Bonus 2 — planned)&#xa;mTLS · VirtualService · Kiali" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=none;fontFamily=Verdana;fontSize=10;dashed=1;fontColor=#333333;strokeColor=#999999;" parent="1" vertex="1">

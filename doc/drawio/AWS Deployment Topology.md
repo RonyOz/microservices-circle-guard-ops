@@ -20,7 +20,7 @@ Resource inventory for `AWS Deployment Topology.drawio`. One row per diagram ele
 
 | Diagram element | AWS resource | Description | Terraform source |
 |---|---|---|---|
-| Amazon ECR — `circleguard (immutable)` | ECR repository | Single repository for all service images; the service is encoded in the tag (`<service>-sha-<commit7>`). Immutable tags prevent overwrite. | `modules/ecr/` (`repository_name = "circleguard"`) |
+| Amazon ECR — `circleguard (mutable tags)` | ECR repository | Single repository for all service images; the service is encoded in the tag (`<service>-sha-<commit7>`). Tags are mutable (`image_tag_mutability = "MUTABLE"`); uniqueness comes from the commit SHA in the tag. | `modules/ecr/` (`repository_name = "circleguard"`) |
 | Amazon S3 — `circleguard-tfstate` | S3 bucket | Terraform remote state backend with S3-native locking (`use_lockfile=true`). Written by local `terraform apply`, not CI. Bucket is not Terraform-managed so it survives a `destroy`. | `terraform/aws/main.tf` `backend "s3"`; created by `scripts/init-s3-backend.sh` |
 | Secrets Manager — `runtime via IRSA` | AWS Secrets Manager | Holds long-lived runtime secrets (DB credentials, JWT). Pods read them through External Secrets Operator using IRSA. | `modules/irsa-secrets/` |
 
@@ -52,19 +52,20 @@ Resource inventory for `AWS Deployment Topology.drawio`. One row per diagram ele
 | Diagram element | AWS resource | Description | Terraform source |
 |---|---|---|---|
 | Application Load Balancer — `LB Controller v2.8 · ingressClassName` | `aws_lb` (provisioned by AWS Load Balancer Controller) | Public-facing ALB across both public subnets. Created from Kubernetes Ingress via `spec.ingressClassName` (migrated off the deprecated annotation). Routes to `gateway-service`. | K8s Ingress: `services/gateway-service/chart/templates/ingress.yaml` |
+| Application Load Balancer — internal (`dashboard-service`) | `aws_lb` (provisioned by AWS Load Balancer Controller) | Internal ALB (`alb.ingress.kubernetes.io/scheme: internal`); exposes `dashboard-service` only inside the VPC. | K8s Ingress: `services/dashboard-service/chart/templates/ingress.yaml` |
 
 ## Storage / Secrets (cluster add-ons)
 
 | Diagram element | AWS resource | Description | Terraform source |
 |---|---|---|---|
-| EBS gp3 — `PVCs (CSI driver)` | `aws_eks_addon` `aws-ebs-csi-driver` + IRSA role | Provides `gp3` PersistentVolumes for StatefulSets. CSI controller authenticates via IRSA (`ebs-csi-controller-sa`). | `modules/eks-cluster/main.tf` `aws_eks_addon.ebs_csi`, `aws_iam_role.ebs_csi` |
+| EBS gp2 — `PVCs (CSI driver)` | `aws_eks_addon` `aws-ebs-csi-driver` + IRSA role | Provides `gp2` PersistentVolumes for StatefulSets (default EKS StorageClass; `infrastructure/chart/values.yaml` `storageClassName: gp2`). CSI controller authenticates via IRSA (`ebs-csi-controller-sa`). | `modules/eks-cluster/main.tf` `aws_eks_addon.ebs_csi`, `aws_iam_role.ebs_csi` |
 | External Secrets Operator (in `ESO · IRSA → secret`) | ESO + ClusterSecretStore | Syncs AWS Secrets Manager secrets into Kubernetes Secrets via IRSA; pods consume them with `envFrom.secretRef`. | `modules/irsa-secrets/`; `bootstrap-eso.yml`; `infrastructure/chart/` |
 
 ---
 
 ## Data plane (StatefulSets on EKS, EBS-backed)
 
-Run as pods inside the cluster (not AWS managed services); backed by EBS gp3 PVCs.
+Run as pods inside the cluster (not AWS managed services); backed by EBS gp2 PVCs. Deployed per namespace via the `circleguard-infra` Helm chart (`infrastructure/chart/`).
 
 | Component | Role |
 |---|---|
@@ -74,7 +75,19 @@ Run as pods inside the cluster (not AWS managed services); backed by EBS gp3 PVC
 | Zookeeper | Kafka coordination |
 | Redis | QR token cache (gateway) |
 | OpenLDAP | Directory for auth |
-| MailHog | SMTP capture (non-production) |
+| MailHog | SMTP capture (non-production); also AlertManager notification target |
+
+### Observability (same chart, in-cluster)
+
+| Component | Role |
+|---|---|
+| Prometheus (v2.51.2) | Metrics scrape + 15d retention |
+| Grafana (10.4.2) | Dashboards |
+| AlertManager (v0.27.0) | Alert routing → MailHog SMTP |
+| Jaeger (1.57.0) | Distributed tracing (all-in-one) |
+| Elasticsearch + Kibana + Filebeat (8.13.4) | Log aggregation (ELK) |
+| kube-state-metrics (v2.12.0) | Kubernetes object metrics |
+| SonarQube (lts-community) | Present in chart but `enabled: false` (analysis runs in CI via SonarCloud) |
 
 ---
 

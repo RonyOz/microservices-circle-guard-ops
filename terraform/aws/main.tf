@@ -85,6 +85,7 @@ module "eks" {
   node_desired_count  = var.node_desired_count
   node_min_count      = var.node_min_count
   node_max_count      = var.node_max_count
+  node_capacity_type  = var.node_capacity_type
   deploy_role_arn     = module.github_oidc.role_arn # EKS access entry for CI deploys
   tags                = local.common_tags
 }

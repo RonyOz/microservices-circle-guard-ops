@@ -173,6 +173,29 @@ workflow trigger could nuke the account. Provisioning is therefore a deliberate 
 
 ---
 
+## FinOps — cost breakdown
+
+Full analysis with assumptions: [`doc/md/cost-analysis.md`](doc/md/cost-analysis.md).
+
+| Scenario | USD/month | Notes |
+|:---|---:|:---|
+| Naive always-on (3× on-demand nodes, 730 h) | ≈ $380 | baseline, no optimization |
+| On-demand usage (~120 h/month, `aws-down.sh`) | ≈ $146 | −62% |
+| **Spot + 120 h + scale-to-zero idle (current setup)** | **≈ $95–105** | **−73%** |
+
+Active strategies (10 of 11 — see `cost-analysis.md` §7):
+
+- **Spot node group** — `node_capacity_type = "SPOT"` with 3 equivalent instance types (~60–70% off compute).
+- **Scale-to-zero** — `./scripts/scale-down.sh --zero` (compute → $0; cluster, PVCs and data survive). Restore with `./scripts/scale-up.sh`.
+- **HPA** on gateway + auth (min=1 / max=3 / CPU 70%).
+- **AWS Budgets** — $20/month with 80% actual + 100% forecast email alerts (`terraform/aws/budgets.tf`).
+- **Cost monitoring** — all resources tagged `Project=circleguard` (filter in Cost Explorer); Grafana dashboard `circleguard-finops` shows utilization, HPA activity and estimated $/h, $/month, and cost per service.
+- Single NAT gateway, ECR lifecycle policy (keep 20 images), burstable `m7i-flex` nodes, on-demand shutdown scripts.
+
+Pending: Graviton (`m7g`) nodes — requires multi-arch image builds (~20% extra off compute).
+
+---
+
 ## Documentation
 
 | Doc | Purpose |
@@ -185,6 +208,7 @@ workflow trigger could nuke the account. Provisioning is therefore a deliberate 
 | `doc/change-management.md` | PR template, CODEOWNERS, definition of done |
 | `doc/operations-manual.md` | Deploy, rollback, logs, scaling runbook |
 | `doc/performance-analysis.md` | Locust results (p95 / throughput / error-rate) |
+| `doc/cost-analysis.md` | FinOps: cost breakdown, savings strategies, spot/scale-to-zero analysis |
 | `doc/sprints.md` | Sprint retros, velocity, burndown |
 | `doc/user-stories.md` | Backlog / user stories |
 

@@ -4,6 +4,7 @@
 
 > Service-agnostic. The application code (8 Spring Boot microservices + Expo mobile) lives in [`microservices-circle-guard-dev`](../microservices-circle-guard-dev). The dev repo triggers this repo via `repository_dispatch`, passing the service name and image tag.
 
+![AWS Deployment Topology](doc/img/AWS%20Deployment%20Topology.png)
 ---
 
 ## Platform
@@ -212,4 +213,3 @@ Pending: Graviton (`m7g`) nodes — requires multi-arch image builds (~20% extra
 | `doc/sprints.md` | Sprint retros, velocity, burndown |
 | `doc/user-stories.md` | Backlog / user stories |
 
-> Full workspace context: `/home/ronyoz/dev/cg/CLAUDE.md` · Completeness tracker: `PROJECT-FINAL-PLAN.md`.
